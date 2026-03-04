@@ -1,0 +1,3 @@
+[submodule "source/cf_lab/data/Robots/ayg_description"]
+	path = source/cf_lab/data/Robots/ayg_description
+	url = https://github.com/Cyber-Fusion/ayg_description.git

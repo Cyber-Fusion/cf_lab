@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(pip show:*)",
+      "Bash(pre-commit run:*)",
+      "Bash(ruff:*)",
+      "Bash(ls:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(OPENBLAS_NUM_THREADS=1 python:*)",
+      "Bash(OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=\"$CLAUDE_FILE_PATH\"; if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.py$'; then ruff check --fix --quiet \"$file\" 2>/dev/null; ruff format --quiet \"$file\" 2>/dev/null; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=\"$CLAUDE_FILE_PATH\"; if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.(env|key|pem|secret)'; then echo 'BLOCK: Refusing to edit sensitive file'; exit 2; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
