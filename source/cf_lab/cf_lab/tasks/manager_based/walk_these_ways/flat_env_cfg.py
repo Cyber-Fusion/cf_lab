@@ -5,7 +5,7 @@
 
 from isaaclab.utils import configclass
 
-from isaaclab_tasks.manager_based.locomotion.walk_these_ways.wtw_params import WalkTheseWaysParams as Params
+from cf_lab.tasks.manager_based.walk_these_ways.wtw_params import WalkTheseWaysParams as Params
 Params.height_scanner = None
 
 from .rough_env_cfg import AygRoughWTWEnvCfg

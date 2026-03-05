@@ -13,7 +13,7 @@ from . import agents
 
 gym.register(
     id="Isaac-WTW-Flat-Ayg-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.flat_env_cfg:AygFlatWTWEnvCfg",
@@ -23,7 +23,7 @@ gym.register(
 
 gym.register(
     id="Isaac-WTW-Flat-Ayg-Play-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.flat_env_cfg:AygFlatWTWEnvCfg_PLAY",
@@ -33,7 +33,7 @@ gym.register(
 
 gym.register(
     id="Isaac-WTW-Rough-Ayg-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.rough_env_cfg:AygRoughWTWEnvCfg",
@@ -43,7 +43,7 @@ gym.register(
 
 gym.register(
     id="Isaac-WTW-Rough-Ayg-Play-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.rough_env_cfg:AygRoughWTWEnvCfg_PLAY",

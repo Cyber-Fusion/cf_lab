@@ -1,18 +1,33 @@
-# Template for Isaac Lab Projects
+# CyberFusion Lab
 
 ## Overview
 
-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
-
-**Key Features:**
-
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
-
-**Keywords:** extension, template, isaaclab
+CF Lab is an Isaac Lab extension for RL-based locomotion control of the AYG quadruped robot.
 
 ## Installation
+
+### Isaac Lab
+
+Follow the instruction [here](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html), i.e.,
+```shell
+uv venv --python 3.11 --seed .venv
+source .venv/bin/activate
+uv pip install isaaclab[isaacsim,all]==2.3.2.post1 --extra-index-url https://pypi.nvidia.com
+uv pip install -U torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
+uv pip install git+https://github.com/isaac-sim/rl_games.git@python3.11
+```
+
+Verify the installation by running the simulator with
+```shell
+isaaclab
+```
+
+## Local Project
+
+Install `cf_lab` with
+```shell
+uv pip install -e source/cf_lab
+```
 
 - Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
   We recommend using the conda or uv installation as it simplifies calling Python scripts from the terminal.

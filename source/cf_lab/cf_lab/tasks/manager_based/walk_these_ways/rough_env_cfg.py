@@ -5,9 +5,9 @@
 
 from isaaclab.utils import configclass
 
-from isaaclab_tasks.manager_based.locomotion.walk_these_ways.wtw_params import WalkTheseWaysParams as Params
+from cf_lab.tasks.manager_based.walk_these_ways.wtw_params import WalkTheseWaysParams as Params
 
-from isaaclab_tasks.manager_based.locomotion.walk_these_ways.walk_these_ways_env_cfg import LocomotionWalkTheseWaysRoughEnvCfg
+from cf_lab.tasks.manager_based.walk_these_ways.wtw_env_cfg import LocomotionWalkTheseWaysRoughEnvCfg
 
 ##
 # Pre-defined configs
