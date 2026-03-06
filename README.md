@@ -121,6 +121,16 @@ pre-commit run --all-files
 
 ## Troubleshooting
 
+### BLAS/OpenMP Threading Crash
+
+Training may crash with "Illegal instruction" or a segfault caused by OpenBLAS/MKL thread conflicts. Fix by setting these environment variables before running any training script:
+
+```bash
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+```
+
+## Troubleshooting (IDE)
+
 ### Pylance Missing Indexing of Extensions
 
 In some VsCode versions, the indexing of part of the extensions is missing.

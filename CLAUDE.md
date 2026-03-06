@@ -14,6 +14,15 @@ python -m pip install -e source/cf_lab
 ```
 
 ### Training
+
+**Important:** You must set BLAS/OpenMP threading variables to avoid crashes (illegal instruction / segfault from OpenBLAS thread conflicts):
+
+```bash
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+```
+
+Then run training:
+
 ```bash
 # RSL-RL (primary RL library)
 python scripts/rsl_rl/train.py --task=Isaac-Velocity-Flat-Ayg-v0
