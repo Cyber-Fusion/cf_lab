@@ -5,9 +5,6 @@
 
 from isaaclab.utils import configclass
 
-from cf_lab.tasks.manager_based.walk_these_ways.wtw_params import WalkTheseWaysParams as Params
-Params.height_scanner = None
-
 from .rough_env_cfg import AygRoughWTWEnvCfg
 
 
@@ -27,8 +24,10 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # no height scan
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
-        self.observations.policy.height_scan = None
         self.observations.critic.height_scan = None
+        # null out height_scanner refs in reward params for flat terrain
+        self.rewards.base_height_l2.params["sensor_cfg"] = None
+        self.rewards.footswing_height.params["height_scanner_cfg"] = None
         # no terrain curriculum
         self.curriculum.terrain_levels = None
 

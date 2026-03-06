@@ -335,14 +335,14 @@ class RewardsCfg:
         }
     )
 
-    feet_clearance = RewTerm(
-        func=mdp.foot_clearance,
-        weight=-0.0,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
-            "sensor_cfg": Params.height_scanner,
-        },
-    )
+    # feet_clearance = RewTerm(
+    #     func=mdp.foot_clearance,
+    #     weight=-0.0,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
+    #         "sensor_cfg": Params.height_scanner,
+    #     },
+    # )
 
     foot_clearance = RewTerm(
         func=mdp.foot_clearance_reward,

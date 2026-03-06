@@ -420,6 +420,12 @@ class ActionSmoothnessPenalty(ManagerTermBase):
         self.prev_prev_action = None
         self.prev_action = None
 
+    def reset(self, env_ids=None):
+        if self.prev_action is not None and env_ids is not None:
+            self.prev_action[env_ids] = 0.0
+        if self.prev_prev_action is not None and env_ids is not None:
+            self.prev_prev_action[env_ids] = 0.0
+
     def __call__(self, env: ManagerBasedRLEnv) -> torch.Tensor:
         """Compute the action smoothness penalty.
 
