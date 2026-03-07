@@ -49,9 +49,8 @@ def air_time_reward(
     t_min = torch.clip(t_max, max=mode_time)
     stance_cmd_reward = torch.clip(current_contact_time - current_air_time, -mode_time, mode_time)
     cmd = torch.norm(env.command_manager.get_command("base_velocity"), dim=1).unsqueeze(dim=1).expand(-1, 4)
-    body_vel = torch.linalg.norm(asset.data.root_lin_vel_b[:, :2], dim=1).unsqueeze(dim=1).expand(-1, 4)
     reward = torch.where(
-        torch.logical_or(cmd > 0.0, body_vel > velocity_threshold),
+        cmd > 0.0,
         torch.where(t_max < mode_time, t_min, 0),
         stance_cmd_reward,
     )
@@ -148,10 +147,7 @@ class GaitReward(ManagerTermBase):
         async_reward = async_reward_0 * async_reward_1 * async_reward_2 * async_reward_3
         # only enforce gait if cmd > 0
         cmd = torch.norm(env.command_manager.get_command("base_velocity"), dim=1)
-        body_vel = torch.linalg.norm(self.asset.data.root_lin_vel_b[:, :2], dim=1)
-        return torch.where(
-            torch.logical_or(cmd > 0.0, body_vel > self.velocity_threshold), sync_reward * async_reward, 0.0
-        )
+        return torch.where(cmd > 0.0, sync_reward * async_reward, 0.0)
 
     """
     Helper functions.
@@ -263,9 +259,8 @@ def joint_position_penalty(
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     cmd = torch.linalg.norm(env.command_manager.get_command("base_velocity"), dim=1)
-    body_vel = torch.linalg.norm(asset.data.root_lin_vel_b[:, :2], dim=1)
     reward = torch.linalg.norm((asset.data.joint_pos - asset.data.default_joint_pos), dim=1)
-    return torch.where(torch.logical_or(cmd > 0.0, body_vel > velocity_threshold), reward, stand_still_scale * reward)
+    return torch.where(cmd > 0.0, reward, stand_still_scale * reward)
 
 
 def joint_torques_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
