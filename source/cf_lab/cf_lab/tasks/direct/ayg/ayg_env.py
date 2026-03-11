@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+import math
+
 import gymnasium as gym
 import torch
 
 import isaaclab.sim as sim_utils
+import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
-from isaaclab.sensors import ContactSensor, RayCaster
+from isaaclab.sensors import ContactSensor
 
 from .ayg_env_cfg import AygFlatEnvCfg, AygRoughEnvCfg
+
+# Observation noise ranges (matching manager-based env)
+NOISE_RANGES = {
+    "base_lin_vel": 0.1,
+    "base_ang_vel": 0.2,
+    "projected_gravity": 0.05,
+    "joint_pos": 0.01,
+    "joint_vel": 1.5,
+}
 
 
 class AygEnv(DirectRLEnv):
@@ -25,6 +37,11 @@ class AygEnv(DirectRLEnv):
 
         # X/Y linear velocity and yaw angular velocity commands
         self._commands = torch.zeros(self.num_envs, 3, device=self.device)
+        # Heading target for heading-based yaw control
+        self._heading_target = torch.zeros(self.num_envs, device=self.device)
+        # Command resampling timer (in steps)
+        self._command_resample_steps = int(self.cfg.command_resample_time / (self.cfg.sim.dt * self.cfg.decimation))
+        self._command_time_left = torch.zeros(self.num_envs, dtype=torch.int, device=self.device)
 
         # Logging
         self._episode_sums = {
@@ -40,28 +57,28 @@ class AygEnv(DirectRLEnv):
                 "feet_air_time",
                 "undesired_contacts",
                 "flat_orientation_l2",
-                "cosmetic",
+                "feet_regulation",
             ]
         }
         # Get specific body indices
-        self._base_id, _ = self._contact_sensor.find_bodies("Base")
-        self._feet_ids, _ = self._contact_sensor.find_bodies(".*Foot")
-        self._undesired_contact_body_ids, _ = self._contact_sensor.find_bodies(".*Shank")
+        self._base_id, _ = self._contact_sensor.find_bodies(["Base", ".*_Hip"])
+        self._feet_ids, _ = self._contact_sensor.find_bodies(".*_Foot")
+        self._undesired_contact_body_ids, _ = self._contact_sensor.find_bodies([".*_Shank", ".*_Thigh"])
+        self._feet_body_ids, _ = self._robot.find_bodies(".*_Foot")
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
         self.scene.sensors["contact_sensor"] = self._contact_sensor
-        if isinstance(self.cfg, AygRoughEnvCfg):
-            # we add a height scanner for perceptive locomotion
-            self._height_scanner = RayCaster(self.cfg.height_scanner)
-            self.scene.sensors["height_scanner"] = self._height_scanner
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
+        # filter collisions for CPU simulation
+        if self.device == "cpu":
+            self.scene.filter_collisions(global_prim_paths=[self.cfg.terrain.prim_path])
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
@@ -75,25 +92,57 @@ class AygEnv(DirectRLEnv):
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
-        height_data = None
-        if isinstance(self.cfg, AygRoughEnvCfg):
-            height_data = (
-                self._height_scanner.data.pos_w[:, 2].unsqueeze(1) - self._height_scanner.data.ray_hits_w[..., 2] - 0.5
-            ).clip(-1.0, 1.0)
+        # Resample commands for envs whose timer has expired
+        self._command_time_left -= 1
+        resample_ids = (self._command_time_left <= 0).nonzero(as_tuple=False).flatten()
+        if len(resample_ids) > 0:
+            self._resample_commands(resample_ids)
+
+        # Compute heading-based yaw command
+        root_quat = self._robot.data.root_quat_w
+        _, _, yaw = math_utils.euler_xyz_from_quat(root_quat)
+        heading_error = torch.atan2(
+            torch.sin(self._heading_target - yaw), torch.cos(self._heading_target - yaw)
+        )
+        self._commands[:, 2] = torch.clamp(
+            self.cfg.heading_control_stiffness * heading_error,
+            min=-1.0,
+            max=1.0,
+        )
+
+        # Build observation with noise
+        base_lin_vel = self._robot.data.root_lin_vel_b
+        base_ang_vel = self._robot.data.root_ang_vel_b
+        projected_gravity = self._robot.data.projected_gravity_b
+        joint_pos = self._robot.data.joint_pos - self._robot.data.default_joint_pos
+        joint_vel = self._robot.data.joint_vel
+
+        if self.cfg.enable_obs_noise:
+            base_lin_vel = base_lin_vel + torch.empty_like(base_lin_vel).uniform_(
+                -NOISE_RANGES["base_lin_vel"], NOISE_RANGES["base_lin_vel"]
+            )
+            base_ang_vel = base_ang_vel + torch.empty_like(base_ang_vel).uniform_(
+                -NOISE_RANGES["base_ang_vel"], NOISE_RANGES["base_ang_vel"]
+            )
+            projected_gravity = projected_gravity + torch.empty_like(projected_gravity).uniform_(
+                -NOISE_RANGES["projected_gravity"], NOISE_RANGES["projected_gravity"]
+            )
+            joint_pos = joint_pos + torch.empty_like(joint_pos).uniform_(
+                -NOISE_RANGES["joint_pos"], NOISE_RANGES["joint_pos"]
+            )
+            joint_vel = joint_vel + torch.empty_like(joint_vel).uniform_(
+                -NOISE_RANGES["joint_vel"], NOISE_RANGES["joint_vel"]
+            )
+
         obs = torch.cat(
             [
-                tensor
-                for tensor in (
-                    self._robot.data.root_lin_vel_b,
-                    self._robot.data.root_ang_vel_b,
-                    self._robot.data.projected_gravity_b,
-                    self._commands,
-                    self._robot.data.joint_pos - self._robot.data.default_joint_pos,
-                    self._robot.data.joint_vel,
-                    height_data,
-                    self._actions,
-                )
-                if tensor is not None
+                base_lin_vel,
+                base_ang_vel,
+                projected_gravity,
+                self._commands,
+                joint_pos,
+                joint_vel,
+                self._actions,
             ],
             dim=-1,
         )
@@ -131,12 +180,13 @@ class AygEnv(DirectRLEnv):
         contacts = torch.sum(is_contact, dim=1)
         # flat orientation
         flat_orientation = torch.sum(torch.square(self._robot.data.projected_gravity_b[:, :2]), dim=1)
-        # cosmetic
-        dof_pos = self._robot.data.joint_pos
-        default_dof_pos = self._robot.data.default_joint_pos
-        cosmetic = (
-            torch.sum(torch.abs(dof_pos[:, 0:8] - default_dof_pos[:, 0:8]), dim=1)
-        )
+        # feet regulation
+        feet_pos_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2]
+        feet_vel_xy = self._robot.data.body_lin_vel_w[:, self._feet_body_ids, 0:2]
+        vel_norms_xy = torch.norm(feet_vel_xy, dim=-1)
+        exp_term = torch.exp(-feet_pos_z / (0.025 * 0.65))
+        exp_term = torch.clamp(exp_term, min=0.001, max=10.0)
+        feet_reg = torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
 
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
@@ -149,7 +199,7 @@ class AygEnv(DirectRLEnv):
             "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
             "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
-            "cosmetic": cosmetic * self.cfg.cosmetic_reward_scale * self.step_dt,
+            "feet_regulation": feet_reg * self.cfg.feet_regulation_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -174,12 +224,18 @@ class AygEnv(DirectRLEnv):
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
         # Sample new commands
-        self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
+        self._resample_commands(env_ids)
         # Reset robot state
         joint_pos = self._robot.data.default_joint_pos[env_ids]
         joint_vel = self._robot.data.default_joint_vel[env_ids]
         default_root_state = self._robot.data.default_root_state[env_ids]
         default_root_state[:, :3] += self._terrain.env_origins[env_ids]
+        # Randomize base pose (x, y, yaw) matching manager-based env
+        default_root_state[:, 0] += torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
+        default_root_state[:, 1] += torch.empty(len(env_ids), device=self.device).uniform_(-0.5, 0.5)
+        yaw = torch.empty(len(env_ids), device=self.device).uniform_(-3.14, 3.14)
+        quat_yaw = math_utils.quat_from_euler_xyz(torch.zeros_like(yaw), torch.zeros_like(yaw), yaw)
+        default_root_state[:, 3:7] = math_utils.quat_mul(quat_yaw, default_root_state[:, 3:7])
         self._robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
         self._robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
         self._robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
@@ -195,3 +251,18 @@ class AygEnv(DirectRLEnv):
         extras["Episode_Termination/base_contact"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
         self.extras["log"].update(extras)
+
+    def _resample_commands(self, env_ids: torch.Tensor):
+        """Resample velocity commands for given environment indices."""
+        n = len(env_ids)
+        # Sample linear velocity commands
+        self._commands[env_ids, 0] = torch.empty(n, device=self.device).uniform_(-1.0, 1.0)
+        self._commands[env_ids, 1] = torch.empty(n, device=self.device).uniform_(-1.0, 1.0)
+        # Sample heading target (yaw command is computed from heading error in _get_observations)
+        self._heading_target[env_ids] = torch.empty(n, device=self.device).uniform_(-math.pi, math.pi)
+        # Set standing-still fraction: 2% of envs get zero commands
+        standing_mask = torch.rand(n, device=self.device) < self.cfg.rel_standing_envs
+        self._commands[env_ids[standing_mask], :] = 0.0
+        self._heading_target[env_ids[standing_mask]] = 0.0
+        # Reset resample timer
+        self._command_time_left[env_ids] = self._command_resample_steps

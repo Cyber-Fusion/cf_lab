@@ -3,9 +3,17 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from isaaclab.managers import RewardTermCfg as RewTerm
+from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
-from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
+import isaaclab.envs.mdp as mdp
+from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
+    LocomotionVelocityRoughEnvCfg,
+    RewardsCfg,
+)
+
+from . import mdp as ayg_mdp
 
 ##
 # Pre-defined configs
@@ -14,7 +22,31 @@ from cf_lab.assets.ayg import AYG_CFG  # isort: skip
 
 
 @configclass
+class AygRewardsCfg(RewardsCfg):
+    """Extended reward config with AYG-specific reward terms."""
+
+    base_height_l2 = RewTerm(
+        func=mdp.base_height_l2,
+        weight=0.0,
+        params={"target_height": 0.35, "asset_cfg": SceneEntityCfg("robot", body_names="Base")},
+    )
+
+    joint_deviation_l1 = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+
+    feet_regulation = RewTerm(
+        func=ayg_mdp.feet_regulation,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=".*_Foot")},
+    )
+
+
+@configclass
 class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
+    rewards: AygRewardsCfg = AygRewardsCfg()
     def __post_init__(self):
         # post init of parent
         super().__post_init__()

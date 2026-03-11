@@ -275,3 +275,35 @@ def joint_velocity_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) ->
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     return torch.linalg.norm((asset.data.joint_vel), dim=1)
+
+
+def feet_regulation(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg = None,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    desired_body_height: float = 0.65,
+) -> torch.Tensor:
+    """Penalize feet velocity when feet are close to the ground.
+
+    Encourages the robot to keep its feet still when they are near the ground,
+    reducing unnecessary foot movement during stance phase.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    feet_positions_z = asset.data.body_pos_w[:, asset_cfg.body_ids, 2]
+
+    feet_velocity_xy = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, 0:2]
+    vel_norms_xy = torch.norm(feet_velocity_xy, dim=-1)
+
+    if sensor_cfg is not None:
+        sensor = env.scene[sensor_cfg.name]
+        adjusted_desired_body_height = desired_body_height + sensor.data.pos_w[:, 2]
+        adjusted_desired_body_height = adjusted_desired_body_height.unsqueeze(1).repeat(1, 2)
+    else:
+        adjusted_desired_body_height = desired_body_height
+
+    exp_term = torch.exp(-feet_positions_z / (0.025 * adjusted_desired_body_height))
+    exp_term = torch.clamp(exp_term, min=0.001, max=10.0)
+    r_fr = torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
+
+    return r_fr
