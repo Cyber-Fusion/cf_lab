@@ -64,7 +64,7 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.rewards.feet_air_time.weight = -0.0
         self.rewards.undesired_contacts.weight = -1.0
 
-        self.rewards.gait.weight = 0.5
+        self.rewards.gait.weight = 4.0
         self.rewards.footswing_height.weight = -5.0
         self.rewards.foot_clearance.weight = 0.0
 
