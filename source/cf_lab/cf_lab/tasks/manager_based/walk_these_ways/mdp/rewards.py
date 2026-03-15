@@ -232,7 +232,7 @@ class FootSwingHeightQuad(GaitRewardQuad):
 
         return torch.sum(
             torch.square(feet_heights - cmd_height) \
-                * desired_contacts[:, :],
+                * (1 - desired_contacts[:, :]),
             dim=1
         ) * cmd_not_null
 
