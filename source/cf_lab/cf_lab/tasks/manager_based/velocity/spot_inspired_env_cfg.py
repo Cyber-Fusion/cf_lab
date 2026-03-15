@@ -18,10 +18,10 @@ from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
-from . import mdp as ayg_mdp
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import LocomotionVelocityRoughEnvCfg
 
+from . import mdp as ayg_mdp
 from .ayg_params import AygParams as Params
 
 ##
@@ -53,7 +53,9 @@ COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
 class AygActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.2, use_default_offset=True)
+    joint_pos = mdp.JointPositionActionCfg(
+        asset_name="robot", joint_names=[".*"], scale=0.2, use_default_offset=True, clip={".*": (-100.0, 100.0)}
+    )
 
 
 @configclass
@@ -80,65 +82,76 @@ class AygObservationsCfg:
 
     @configclass
     class PolicyCfg(ObsGroup):
-        """Observations for policy group."""
+        """Observations for the actor (no privileged info like ground-truth linear velocity)."""
 
-        # `` observation terms (order preserved)
-        base_lin_vel = ObsTerm(
-            func=mdp.base_lin_vel, params={"asset_cfg": SceneEntityCfg("robot")}, noise=Unoise(n_min=-0.1, n_max=0.1)
-        )
         base_ang_vel = ObsTerm(
-            func=mdp.base_ang_vel, params={"asset_cfg": SceneEntityCfg("robot")}, noise=Unoise(n_min=-0.1, n_max=0.1)
+            func=mdp.base_ang_vel,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+            scale=0.2,
+            clip=(-100, 100),
+            noise=Unoise(n_min=-0.1, n_max=0.1),
         )
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             params={"asset_cfg": SceneEntityCfg("robot")},
+            clip=(-100, 100),
             noise=Unoise(n_min=-0.05, n_max=0.05),
         )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
         joint_pos = ObsTerm(
-            func=mdp.joint_pos_rel, params={"asset_cfg": SceneEntityCfg("robot")}, noise=Unoise(n_min=-0.05, n_max=0.05)
+            func=mdp.joint_pos_rel,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+            clip=(-100, 100),
+            noise=Unoise(n_min=-0.05, n_max=0.05),
         )
         joint_vel = ObsTerm(
-            func=mdp.joint_vel_rel, params={"asset_cfg": SceneEntityCfg("robot")}, noise=Unoise(n_min=-0.5, n_max=0.5)
+            func=mdp.joint_vel_rel,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+            scale=0.05,
+            clip=(-100, 100),
+            noise=Unoise(n_min=-0.5, n_max=0.5),
         )
-        actions = ObsTerm(func=mdp.last_action)
+        actions = ObsTerm(func=mdp.last_action, clip=(-100, 100))
 
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
-            # self.history_length = 5
-            # self.flatten_history_dim = True
 
     @configclass
     class CriticCfg(ObsGroup):
-        """Observations for policy group."""
+        """Privileged observations for the critic (includes ground-truth velocity, foot state)."""
 
-        # `` observation terms (order preserved)
-        base_lin_vel = ObsTerm(
-            func=mdp.base_lin_vel, params={"asset_cfg": SceneEntityCfg("robot")}, noise=Unoise(n_min=-0.1, n_max=0.1)
-        )
-        base_ang_vel = ObsTerm(
-            func=mdp.base_ang_vel, params={"asset_cfg": SceneEntityCfg("robot")}, noise=Unoise(n_min=-0.1, n_max=0.1)
-        )
-        projected_gravity = ObsTerm(
-            func=mdp.projected_gravity,
-            params={"asset_cfg": SceneEntityCfg("robot")},
-            noise=Unoise(n_min=-0.05, n_max=0.05),
-        )
+        # -- shared terms (no noise, no scaling)
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, params={"asset_cfg": SceneEntityCfg("robot")})
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, params={"asset_cfg": SceneEntityCfg("robot")})
+        projected_gravity = ObsTerm(func=mdp.projected_gravity, params={"asset_cfg": SceneEntityCfg("robot")})
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        joint_pos = ObsTerm(
-            func=mdp.joint_pos_rel, params={"asset_cfg": SceneEntityCfg("robot")}, noise=Unoise(n_min=-0.05, n_max=0.05)
-        )
-        joint_vel = ObsTerm(
-            func=mdp.joint_vel_rel, params={"asset_cfg": SceneEntityCfg("robot")}, noise=Unoise(n_min=-0.5, n_max=0.5)
-        )
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel, params={"asset_cfg": SceneEntityCfg("robot")})
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel, params={"asset_cfg": SceneEntityCfg("robot")})
         actions = ObsTerm(func=mdp.last_action)
+        # -- privileged terms
+        foot_heights = ObsTerm(
+            func=ayg_mdp.foot_heights,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names)},
+        )
+        foot_air_time = ObsTerm(
+            func=ayg_mdp.foot_air_time,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names)},
+        )
+        foot_contact = ObsTerm(
+            func=ayg_mdp.foot_contact,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names), "threshold": 1.0},
+        )
+        foot_contact_forces = ObsTerm(
+            func=ayg_mdp.foot_contact_forces,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names)},
+        )
 
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
-            self.history_length = 5
-            self.flatten_history_dim = True
+            # self.history_length = 5
+            # self.flatten_history_dim = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -157,7 +170,7 @@ class AygEventCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
             "static_friction_range": (0.3, 1.0),
             "dynamic_friction_range": (0.3, 0.8),
-            "restitution_range": (0.0, 0.0),
+            "restitution_range": (0.0, 0.15),
             "num_buckets": 64,
         },
     )
@@ -167,7 +180,7 @@ class AygEventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name),
-            "mass_distribution_params": (-2.5, 2.5),
+            "mass_distribution_params": (-5.0, 5.0),
             "operation": "add",
         },
     )
@@ -264,7 +277,7 @@ class AygRewardsCfg:
             "velocity_threshold": 0.5,
             "synced_feet_pair_names": (
                 (Params.lf_foot_name, Params.rh_foot_name),
-                (Params.rf_foot_name, Params.lh_foot_name)
+                (Params.rf_foot_name, Params.lh_foot_name),
             ),
             "asset_cfg": SceneEntityCfg("robot"),
             "sensor_cfg": SceneEntityCfg("contact_forces"),
@@ -326,7 +339,10 @@ class AygTerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     body_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.termination_contact_names), "threshold": 1.0},
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.termination_contact_names),
+            "threshold": 1.0,
+        },
     )
     terrain_out_of_bounds = DoneTerm(
         func=mdp.terrain_out_of_bounds,
@@ -337,7 +353,6 @@ class AygTerminationsCfg:
 
 @configclass
 class AygFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
-
     # Basic settings'
     observations: AygObservationsCfg = AygObservationsCfg()
     actions: AygActionsCfg = AygActionsCfg()
