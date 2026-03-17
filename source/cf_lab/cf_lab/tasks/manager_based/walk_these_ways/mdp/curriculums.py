@@ -53,3 +53,67 @@ def terrain_levels_vel(
     terrain.update_env_origins(env_ids, move_up, move_down)
     # return the mean terrain level
     return torch.mean(terrain.terrain_levels.float())
+
+
+def velocity_command_curriculum(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    command_name: str = "base_velocity",
+    lin_vel_step: float = 0.5,
+    ang_vel_step: float = 0.5,
+    max_lin_vel_x: float = 3.0,
+    max_lin_vel_y: float = 1.0,
+    max_ang_vel_z: float = 5.0,
+    reward_threshold_lin: float = 0.8,
+    reward_threshold_ang: float = 0.7,
+) -> float:
+    """Velocity command curriculum.
+
+    Progressively widens the velocity command ranges as the agent's velocity tracking
+    performance improves. Linear and angular velocity ranges are expanded independently
+    when the corresponding episodic tracking reward exceeds the threshold.
+
+    The curriculum checks the average episodic reward for the resetting environments
+    (normalized by episode length) and expands the range by one bin step if above threshold.
+
+    Returns:
+        The current max linear velocity (for logging).
+    """
+    if len(env_ids) == 0:
+        return 0.0
+
+    cmd_term = env.command_manager.get_term(command_name)
+
+    # Get per-env episodic reward for velocity tracking terms
+    # (episode_sums are still available here — curriculum runs before reward_manager.reset)
+    ep_len = env.episode_length_buf[env_ids].float().clamp(min=1.0) * env.step_dt
+
+    lin_sum = env.reward_manager._episode_sums.get("track_lin_vel_xy_exp", None)
+    ang_sum = env.reward_manager._episode_sums.get("track_ang_vel_z_exp", None)
+
+    if lin_sum is not None:
+        avg_lin_reward = (lin_sum[env_ids] / ep_len).mean().item()
+    else:
+        avg_lin_reward = 0.0
+
+    if ang_sum is not None:
+        avg_ang_reward = (ang_sum[env_ids] / ep_len).mean().item()
+    else:
+        avg_ang_reward = 0.0
+
+    # Expand linear velocity range
+    if avg_lin_reward > reward_threshold_lin:
+        cur_max_x = cmd_term.cfg.ranges.lin_vel_x[1]
+        new_max_x = min(cur_max_x + lin_vel_step, max_lin_vel_x)
+        cmd_term.cfg.ranges.lin_vel_x = (-new_max_x, new_max_x)
+        cur_max_y = cmd_term.cfg.ranges.lin_vel_y[1]
+        new_max_y = min(cur_max_y + lin_vel_step, max_lin_vel_y)
+        cmd_term.cfg.ranges.lin_vel_y = (-new_max_y, new_max_y)
+
+    # Expand angular velocity range
+    if avg_ang_reward > reward_threshold_ang:
+        cur_max_z = cmd_term.cfg.ranges.ang_vel_z[1]
+        new_max_z = min(cur_max_z + ang_vel_step, max_ang_vel_z)
+        cmd_term.cfg.ranges.ang_vel_z = (-new_max_z, new_max_z)
+
+    return cmd_term.cfg.ranges.lin_vel_x[1]

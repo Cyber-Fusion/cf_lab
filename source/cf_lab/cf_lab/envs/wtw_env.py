@@ -3,7 +3,17 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Custom ManagerBasedRLEnv with exp_negative reward computation support."""
+"""Custom ManagerBasedRLEnv with WTW reward composition.
+
+Total reward is computed as:
+    r_total = r_task * exp(c_aux * r_aux)
+
+where r_task is the sum of task (positive-weight) reward terms and r_aux is the
+sum of auxiliary (negative-weight) penalty terms. c_aux = 0.02.
+
+This ensures the agent is always rewarded for task progress, with auxiliary
+penalties only modulating the magnitude — penalties can never overwhelm task reward.
+"""
 
 from __future__ import annotations
 
@@ -13,63 +23,59 @@ from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.managers import RewardManager
 
 
-class ExpNegativeRewardManager(RewardManager):
-    """RewardManager with exp_negative reward type support.
+# Task reward term names (positive task rewards)
+_TASK_TERM_NAMES = {"track_lin_vel_xy_exp", "track_ang_vel_z_exp"}
 
-    When reward_type is "exp_negative", the total reward is computed as:
-        R = sum(positive_terms) * exp(sum(negative_terms) / negative_reward_scale)
+# c_aux = 0.02
+_C_AUX = 0.02
 
-    This encourages the agent to maximize positive rewards while minimizing negative ones,
-    with the exponential term smoothly scaling down positive rewards when negatives are large.
+
+class WTWRewardManager(RewardManager):
+    """RewardManager implementing the WTW reward composition.
+
+    Instead of a linear sum, rewards are split by term name:
+      - Task terms (velocity tracking) → r_task (summed)
+      - Auxiliary terms (all others) → r_aux (summed, typically negative)
+
+    Total: r_task * exp(c_aux * r_aux)
     """
 
-    reward_type: str = "exp_negative"
-    negative_reward_scale: float = 0.02
-
     def compute(self, dt: float) -> torch.Tensor:
-        if self.reward_type != "exp_negative":
-            return super().compute(dt)
-
-        # exp_negative: R = sum(positive) * exp(sum(negative) / scale)
         self._reward_buf[:] = 0.0
-        negative_reward = torch.zeros_like(self._reward_buf)
+        r_task = torch.zeros_like(self._reward_buf)
+        r_aux = torch.zeros_like(self._reward_buf)
 
         for term_idx, (name, term_cfg) in enumerate(zip(self._term_names, self._term_cfgs)):
-            # skip if weight is zero (micro-optimization)
             if term_cfg.weight == 0.0:
                 self._step_reward[:, term_idx] = 0.0
                 continue
 
-            # compute term's value
             value = term_cfg.func(self._env, **term_cfg.params) * term_cfg.weight * dt
             value = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
 
-            # separate positive and negative components
-            positive_reward = torch.clip(value, min=0.0)
-            negative_reward += torch.clip(value, max=0.0)
-            self._reward_buf += positive_reward
+            # Classify by term name, not by value sign
+            if name in _TASK_TERM_NAMES:
+                r_task += value
+            else:
+                r_aux += value
 
-            # update episodic sum
+            # Update episodic sum and per-step reward (for logging)
             self._episode_sums[name] += value
-
-            # update step reward
             self._step_reward[:, term_idx] = value / dt
 
-        # apply exponential negative scaling
-        self._reward_buf *= torch.exp(negative_reward / self.negative_reward_scale)
+        # WTW formula: r_task * exp(c_aux * r_aux)
+        self._reward_buf = r_task * torch.exp(_C_AUX * r_aux)
         return self._reward_buf
 
 
 class WTWManagerBasedRLEnv(ManagerBasedRLEnv):
-    """ManagerBasedRLEnv with exp_negative reward support.
+    """ManagerBasedRLEnv with WTW reward composition.
 
-    This env subclass replaces the default RewardManager with ExpNegativeRewardManager
-    after initialization, enabling the exp_negative reward computation mode used by
-    Walk-These-Ways environments.
+    Replaces the default RewardManager with WTWRewardManager after initialization.
     """
 
     def load_managers(self):
         super().load_managers()
-        # Replace reward manager with custom one that supports exp_negative
+        # Replace reward manager with WTW version
         del self.reward_manager
-        self.reward_manager = ExpNegativeRewardManager(self.cfg.rewards, self)
+        self.reward_manager = WTWRewardManager(self.cfg.rewards, self)

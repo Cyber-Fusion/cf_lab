@@ -94,16 +94,19 @@ class CommandsCfg:
     """Command specifications for the MDP."""
 
     gait_command = mdp.UniformGaitCommandCfgQuad(
-        resampling_time_range=(5.0, 5.0),  # Fixed resampling time of 5 seconds
-        debug_vis=False,  # No debug visualization needed
+        resampling_time_range=(5.0, 5.0),
+        debug_vis=False,
+        canonical_gait_probability=0.5,
+        canonical_gait_std=0.1,
         ranges=mdp.UniformGaitCommandCfgQuad.Ranges(
-            frequencies=(2.0, 4.0),  # Gait frequency range [Hz]
-            durations=(0.5, 0.5),  # Contact duration range [0-1]
-            offsets2=(0.5, 0.5),  # Phase offsets2 range [0-1]
-            offsets3=(0.5, 0.5),  # Phase offsets3 range [0-1]
-            offsets4=(0.0, 0.0),  # Phase offsets4 range [0-1]
-            feet_height=(0.05, 0.20),
-            base_height=(0.30, 0.40),
+            theta1=(0.0, 1.0),           # Phase offset param 1 [0-1]
+            theta2=(0.0, 1.0),           # Phase offset param 2 [0-1]
+            theta3=(0.0, 1.0),           # Phase offset param 3 [0-1]
+            frequency=(2.0, 4.0),        # Gait frequency [Hz]
+            base_height=(0.30, 0.40),    # Body height [m]
+            body_pitch=(-0.3, 0.3),      # Body pitch [rad]
+            stance_width=(0.15, 0.35),   # Foot stance width [m]
+            footswing_height=(0.05, 0.20),  # Footswing height [m]
         ),
     )
 
@@ -111,12 +114,11 @@ class CommandsCfg:
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
         rel_standing_envs=0.1,
-        rel_heading_envs=1.0,
-        heading_command=True,
-        heading_control_stiffness=0.5,
+        rel_heading_envs=0.0,
+        heading_command=False,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-0.0, 0.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
         ),
     )
 
@@ -137,8 +139,8 @@ class ObservationsCfg:
         """Observations for policy group."""
 
         # observation terms (order preserved)
-        # base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
-        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
+        # o_t = {joint_pos, joint_vel, gravity}
+        # base_ang_vel intentionally excluded — velocity is predicted by state estimator.
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
@@ -159,14 +161,14 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
-            # self.history_length = 1
-            # self.flatten_history_dim = True
+            # 30-step observation history
+            self.history_length = 30
+            self.flatten_history_dim = True
 
     @configclass
     class CriticCfg(ObsGroup):
         """Observations for critic group."""
 
-        # observation terms (order preserved)
         # observation terms (order preserved)
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
@@ -189,12 +191,24 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
-            # self.history_length = 1
-            # self.flatten_history_dim = True
+            # Critic also uses 30-step history
+            self.history_length = 30
+            self.flatten_history_dim = True
+
+    @configclass
+    class EstimatorGtCfg(ObsGroup):
+        """Ground truth for state estimator (privileged info, not corrupted)."""
+
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
+
+        def __post_init__(self):
+            self.enable_corruption = False
+            self.concatenate_terms = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
     critic: CriticCfg = CriticCfg()
+    estimator_gt: EstimatorGtCfg = EstimatorGtCfg()
 
 
 @configclass
@@ -433,6 +447,20 @@ class RewardsCfg:
         },
     )
 
+    # -- body pitch tracking
+    body_pitch_tracking = RewTerm(
+        func=mdp.body_pitch_tracking,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name)},
+    )
+
+    # -- Raibert heuristic footswing
+    raibert_heuristic = RewTerm(
+        func=mdp.RaibertHeuristicFootswing,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names)},
+    )
+
 
 @configclass
 class TerminationsCfg:
@@ -454,6 +482,21 @@ class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+
+    # Progressive velocity command range expansion
+    velocity_curriculum = CurrTerm(
+        func=mdp.velocity_command_curriculum,
+        params={
+            "command_name": "base_velocity",
+            "lin_vel_step": 0.5,        # Expand by 0.5 m/s per step (bin size)
+            "ang_vel_step": 0.5,        # Expand by 0.5 rad/s per step
+            "max_lin_vel_x": 3.0,
+            "max_lin_vel_y": 1.0,
+            "max_ang_vel_z": 5.0,
+            "reward_threshold_lin": 0.8,
+            "reward_threshold_ang": 0.7,
+        },
+    )
 
 
 ##
@@ -481,7 +524,7 @@ class LocomotionWalkTheseWaysRoughEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 4
-        self.episode_length_s = 20.0
+        self.episode_length_s = 10.0
         # simulation settings
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation

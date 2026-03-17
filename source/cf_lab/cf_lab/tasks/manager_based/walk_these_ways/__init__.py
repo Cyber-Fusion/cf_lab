@@ -7,6 +7,9 @@ import gymnasium as gym
 
 from . import agents
 
+# Register custom ActorCriticEstimator into rsl_rl namespace
+import cf_lab.modules  # noqa: F401, E402
+
 ##
 # Register Gym environments.
 ##

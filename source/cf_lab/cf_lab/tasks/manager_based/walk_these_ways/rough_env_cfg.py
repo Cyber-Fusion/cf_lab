@@ -68,6 +68,10 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.rewards.footswing_height.weight = -5.0
         self.rewards.foot_clearance.weight = 0.0
 
+        # WTW augmented auxiliary
+        self.rewards.body_pitch_tracking.weight = -0.1
+        self.rewards.raibert_heuristic.weight = -0.2
+
         self.rewards.stand_when_zero_command.weight = -0.01
         self.rewards.stand_still_when_zero_command.weight = -0.01
 
