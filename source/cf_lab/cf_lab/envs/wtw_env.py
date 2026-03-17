@@ -24,7 +24,6 @@ class ExpNegativeRewardManager(RewardManager):
     """
 
     reward_type: str = "exp_negative"
-    negative_reward_scale: float = 0.02
 
     def compute(self, dt: float) -> torch.Tensor:
         if self.reward_type != "exp_negative":
@@ -56,7 +55,7 @@ class ExpNegativeRewardManager(RewardManager):
             self._step_reward[:, term_idx] = value / dt
 
         # apply exponential negative scaling
-        self._reward_buf *= torch.exp(negative_reward / self.negative_reward_scale)
+        self._reward_buf *= torch.exp(negative_reward)
         return self._reward_buf
 
 

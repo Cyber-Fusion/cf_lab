@@ -234,18 +234,6 @@ class EventCfg:
         },
     )
 
-    randomize_actuators = EventTerm(
-        func=mdp.randomize_actuator_gains,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
-            "stiffness_distribution_params": (20, 30),
-            "damping_distribution_params": (0.4, 0.6),
-            "operation": "abs",
-            "distribution": "uniform",
-        },
-    )
-
     randomize_robot_center_of_mass = EventTerm(
         func=mdp.randomize_rigid_body_coms,
         mode="startup",
@@ -335,22 +323,19 @@ class RewardsCfg:
         }
     )
 
-    # feet_clearance = RewTerm(
-    #     func=mdp.foot_clearance,
-    #     weight=-0.0,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
-    #         "sensor_cfg": Params.height_scanner,
-    #     },
-    # )
-
     foot_clearance = RewTerm(
-        func=mdp.foot_clearance_reward,
-        weight=0.0,
+        func=mdp.FootClearanceCmdLinearQuad,
+        weight=-0.0,
         params={
-            "std": 0.05,
-            "tanh_mult": 2.0,
+            "foot_radius": 0.02,
+            "tracking_contacts_shaped_force": -1.0,
+            "tracking_contacts_shaped_vel": -1.0,
+            "gait_force_sigma": 400.0,
+            "gait_vel_sigma": 10.0,
+            "kappa_gait_probs": 0.05,
+            "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
         },
     )
 
@@ -413,6 +398,17 @@ class RewardsCfg:
             "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
+        },
+    )
+
+    raibert_heuristic = RewTerm(
+        func=mdp.RaibertHeuristicReward,
+        weight=0.0,
+        params={
+            "command_name": "gait_command",
+            "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
+            "desired_stance_width": 0.3,
+            "desired_stance_length": 0.55,
         },
     )
 

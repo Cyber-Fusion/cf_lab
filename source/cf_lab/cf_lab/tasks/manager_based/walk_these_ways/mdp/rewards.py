@@ -265,6 +265,75 @@ class FootSwingHeightQuad(GaitRewardQuad):
         return self.compute_footswing_height(desired_contact_states)
 
 
+class FootClearanceCmdLinearQuad(GaitRewardQuad):
+    """Foot clearance reward matching walk-these-ways _reward_feet_clearance_cmd_linear.
+
+    Uses a phase-modulated target height (triangular profile peaking at mid-swing)
+    and masks by desired contact states so only swing feet are penalized.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.foot_radius = cfg.params.get("foot_radius", 0.02)
+
+    def _compute_unwarped_foot_indices(self, gait_params):
+        """Compute per-foot gait indices without stance/swing warping."""
+        frequencies = gait_params[:, 0]
+        offsets2 = gait_params[:, 2]
+        offsets3 = gait_params[:, 3]
+        offsets4 = gait_params[:, 4]
+
+        gait_indices = torch.remainder(self._env.episode_length_buf * self.dt * frequencies, 1.0)
+
+        foot_indices = torch.remainder(
+            torch.cat(
+                [
+                    gait_indices.view(self.num_envs, 1),
+                    (gait_indices + offsets2 + 1).view(self.num_envs, 1),
+                    (gait_indices + offsets3 + 1).view(self.num_envs, 1),
+                    (gait_indices + offsets4 + 1).view(self.num_envs, 1),
+                ],
+                dim=1,
+            ),
+            1.0,
+        )
+        return foot_indices
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        tracking_contacts_shaped_force,
+        tracking_contacts_shaped_vel,
+        gait_force_sigma,
+        gait_vel_sigma,
+        kappa_gait_probs,
+        command_name,
+        sensor_cfg,
+        asset_cfg,
+        foot_radius=0.02,
+    ) -> torch.Tensor:
+        gait_params = env.command_manager.get_command(self.command_name)
+
+        # Unwarped foot indices for phase-modulated target height
+        foot_indices = self._compute_unwarped_foot_indices(gait_params)
+        # Triangular phase: 0 at stance boundaries, 1 at mid-swing
+        phases = 1 - torch.abs(1.0 - torch.clip((foot_indices * 2.0) - 1.0, 0.0, 1.0) * 2.0)
+
+        # Desired contact states from warped indices (for swing masking)
+        desired_contact_states = self.compute_contact_targets(gait_params)
+
+        # Target height modulated by phase + foot radius offset
+        cmd_height = env.command_manager.get_command("gait_command")[:, 5].unsqueeze(1)
+        target_height = cmd_height * phases + self.foot_radius
+
+        # Foot heights in world frame
+        foot_height = self.asset.data.body_pos_w[:, self.asset_cfg.body_ids, 2]
+
+        # Penalize only swing feet
+        rew_foot_clearance = torch.square(target_height - foot_height) * (1 - desired_contact_states)
+        return torch.sum(rew_foot_clearance, dim=1)
+
+
 class GaitReward(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
         """Initialize the term.
@@ -823,6 +892,85 @@ def stand_still_when_zero_command(
     return (
         torch.norm(joint_vel, p=1, dim=1)
     ) * cmd_null
+
+
+class RaibertHeuristicReward(ManagerTermBase):
+    """Penalize deviation of foot positions from Raibert heuristic desired positions."""
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+
+        self.asset_cfg = cfg.params["asset_cfg"]
+        self.command_name = cfg.params["command_name"]
+        self.dt = env.step_dt
+        self.desired_stance_width = cfg.params["desired_stance_width"]
+        self.desired_stance_length = cfg.params["desired_stance_length"]
+
+        self.asset: Articulation = env.scene[self.asset_cfg.name]
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        command_name,
+        asset_cfg,
+        desired_stance_width,
+        desired_stance_length,
+    ) -> torch.Tensor:
+        gait_params = env.command_manager.get_command(self.command_name)
+        frequencies = gait_params[:, 0]
+        offsets2 = gait_params[:, 2]
+        offsets3 = gait_params[:, 3]
+        offsets4 = gait_params[:, 4]
+
+        # Compute raw per-foot gait indices (no stance/swing warping)
+        gait_indices = torch.remainder(self._env.episode_length_buf * self.dt * frequencies, 1.0)
+        foot_indices = torch.remainder(
+            torch.cat(
+                [
+                    gait_indices.view(self.num_envs, 1),
+                    (gait_indices + offsets2 + 1).view(self.num_envs, 1),
+                    (gait_indices + offsets3 + 1).view(self.num_envs, 1),
+                    (gait_indices + offsets4 + 1).view(self.num_envs, 1),
+                ],
+                dim=1,
+            ),
+            1.0,
+        )
+
+        # Transform foot positions to yaw-only body frame
+        foot_pos_w = self.asset.data.body_pos_w[:, self.asset_cfg.body_ids, :]  # (N, 4, 3)
+        base_pos_w = self.asset.data.root_link_pos_w  # (N, 3)
+        base_quat_w = self.asset.data.root_link_quat_w  # (N, 4)
+
+        translated = foot_pos_w - base_pos_w.unsqueeze(1)
+        yaw_q = yaw_quat(base_quat_w)
+
+        body_frame = torch.zeros(self.num_envs, 4, 3, device=self.asset.device)
+        for i in range(4):
+            body_frame[:, i, :] = quat_rotate_inverse(yaw_q, translated[:, i, :])
+
+        # Nominal stance positions for cf_lab foot order [LF, RF, LH, RH]
+        W = self.desired_stance_width
+        L = self.desired_stance_length
+        xs_nom = torch.tensor([L / 2, L / 2, -L / 2, -L / 2], device=self.asset.device).unsqueeze(0)
+        ys_nom = torch.tensor([W / 2, -W / 2, W / 2, -W / 2], device=self.asset.device).unsqueeze(0)
+
+        # Raibert offsets
+        phases = torch.abs(1.0 - foot_indices * 2.0) - 0.5  # triangle wave [-0.5, 0.5]
+        x_vel_des = env.command_manager.get_command("base_velocity")[:, 0:1]
+        yaw_vel_des = env.command_manager.get_command("base_velocity")[:, 2:3]
+        y_vel_des = yaw_vel_des * self.desired_stance_length / 2
+
+        xs_offset = phases * x_vel_des * (0.5 / frequencies.unsqueeze(1))
+        ys_offset = phases * y_vel_des * (0.5 / frequencies.unsqueeze(1))
+        ys_offset[:, 2:4] *= -1  # flip sign for hind legs (LH, RH)
+
+        desired_xs = xs_nom + xs_offset
+        desired_ys = ys_nom + ys_offset
+        desired = torch.cat((desired_xs.unsqueeze(2), desired_ys.unsqueeze(2)), dim=2)  # (N, 4, 2)
+
+        err = torch.abs(desired - body_frame[:, :, 0:2])
+        return torch.sum(torch.square(err), dim=(1, 2))
 
 
 def feet_regulation(
