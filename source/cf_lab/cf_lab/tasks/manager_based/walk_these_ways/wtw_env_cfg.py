@@ -97,13 +97,13 @@ class CommandsCfg:
         resampling_time_range=(5.0, 5.0),  # Fixed resampling time of 5 seconds
         debug_vis=False,  # No debug visualization needed
         ranges=mdp.UniformGaitCommandCfgQuad.Ranges(
-            frequencies=(2.0, 4.0),  # Gait frequency range [Hz]
+            frequencies=(2.0, 2.0),  # Gait frequency range [Hz]
             durations=(0.5, 0.5),  # Contact duration range [0-1]
             offsets2=(0.5, 0.5),  # Phase offsets2 range [0-1]
             offsets3=(0.5, 0.5),  # Phase offsets3 range [0-1]
             offsets4=(0.0, 0.0),  # Phase offsets4 range [0-1]
-            feet_height=(0.05, 0.20),
-            base_height=(0.30, 0.40),
+            feet_height=(0.15, 0.15),
+            base_height=(0.36, 0.36),
         ),
     )
 
@@ -137,7 +137,7 @@ class ObservationsCfg:
         """Observations for policy group."""
 
         # observation terms (order preserved)
-        # base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
@@ -159,8 +159,8 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
-            # self.history_length = 1
-            # self.flatten_history_dim = True
+            self.history_length = 5
+            self.flatten_history_dim = True
 
     @configclass
     class CriticCfg(ObsGroup):
@@ -189,8 +189,8 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
-            # self.history_length = 1
-            # self.flatten_history_dim = True
+            self.history_length = 5
+            self.flatten_history_dim = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -330,9 +330,9 @@ class RewardsCfg:
             "foot_radius": 0.02,
             "tracking_contacts_shaped_force": -1.0,
             "tracking_contacts_shaped_vel": -1.0,
-            "gait_force_sigma": 400.0,
-            "gait_vel_sigma": 10.0,
-            "kappa_gait_probs": 0.05,
+            "gait_force_sigma": 50.0,
+            "gait_vel_sigma": 1.0,
+            "kappa_gait_probs": 0.07,
             "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
@@ -392,9 +392,9 @@ class RewardsCfg:
         params={
             "tracking_contacts_shaped_force": -1.0,
             "tracking_contacts_shaped_vel": -1.0,
-            "gait_force_sigma": 400.0,
-            "gait_vel_sigma": 10.0,
-            "kappa_gait_probs": 0.05,
+            "gait_force_sigma": 50.0,
+            "gait_vel_sigma": 1.0,
+            "kappa_gait_probs": 0.07,
             "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
@@ -419,9 +419,9 @@ class RewardsCfg:
             "target_height": 0.15,
             "tracking_contacts_shaped_force": -1.0,
             "tracking_contacts_shaped_vel": -1.0,
-            "gait_force_sigma": 400.0,
-            "gait_vel_sigma": 10.0,
-            "kappa_gait_probs": 0.05,
+            "gait_force_sigma": 50.0,
+            "gait_vel_sigma": 1.0,
+            "kappa_gait_probs": 0.07,
             "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
@@ -437,7 +437,7 @@ class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.base_name), "threshold": 1.0},
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.termination_contact_names), "threshold": 1.0},
     )
     simulation_crashed = DoneTerm(
         func=mdp.simulation_crashed,

@@ -25,7 +25,7 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.scene.robot = AYG_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
         # reduce action scale
-        self.actions.joint_pos.scale = 0.25
+        self.actions.joint_pos.scale = {".*HAA": 0.125, ".*HFE": 0.25, ".*KFE": 0.25}
 
         # event
         self.events.push_robot = None
@@ -53,21 +53,23 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
 
         self.rewards.joint_vel_l2.weight = -1.0e-3
         self.rewards.joint_acc_l2.weight = -2.5e-7
-        self.rewards.joint_torques_l2.weight = -1.0e-3
+        self.rewards.joint_torques_l2.weight = -1.0e-3 / 10
 
         self.rewards.base_height_l2.weight = -10.0
         self.rewards.feet_slip.weight = -0.04
 
         self.rewards.action_rate_l2.weight = -0.1
-        self.rewards.action_smoothness_l2.weight = -0.1
+        self.rewards.action_smoothness_l2.weight = -0.1 / 2
 
         self.rewards.feet_air_time.weight = -0.0
-        self.rewards.undesired_contacts.weight = -1.0
+        self.rewards.undesired_contacts.weight = -1.0 * 5
+        
+        self.rewards.joint_deviation_l1.weight = -1.0
 
-        self.rewards.raibert_heuristic.weight = -10.0
-        self.rewards.gait.weight = 4.0
+        self.rewards.raibert_heuristic.weight = -10.0 / 2
+        self.rewards.gait.weight = 4.0 * 2
         self.rewards.footswing_height.weight = -0.0
-        self.rewards.foot_clearance.weight = -30.0
+        self.rewards.foot_clearance.weight = -30.0 * 2
 
         self.rewards.stand_when_zero_command.weight = -0.0
         self.rewards.stand_still_when_zero_command.weight = -0.0

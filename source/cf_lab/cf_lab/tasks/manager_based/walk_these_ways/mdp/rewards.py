@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.sensors import ContactSensor, RayCaster
-from isaaclab.utils.math import quat_rotate_inverse, yaw_quat
+from isaaclab.utils.math import quat_apply_inverse, yaw_quat
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -647,8 +647,8 @@ def feet_clearance(
     cur_footvel_translated = feet_vels - base_vels.unsqueeze(1)
     footvel_in_body_frame = torch.zeros(num_envs, num_feet, 3, device='cuda')
     for i in range(num_feet):
-        footpos_in_body_frame[:, i, :] = quat_rotate_inverse(base_rotation, cur_footpos_translated[:, i, :])
-        footvel_in_body_frame[:, i, :] = quat_rotate_inverse(base_rotation, cur_footvel_translated[:, i, :])
+        footpos_in_body_frame[:, i, :] = quat_apply_inverse(base_rotation, cur_footpos_translated[:, i, :])
+        footvel_in_body_frame[:, i, :] = quat_apply_inverse(base_rotation, cur_footvel_translated[:, i, :])
 
     height_error = torch.square(footpos_in_body_frame[:, :, 2] - target_feet_height).view(num_envs, -1)
     foot_leteral_vel = torch.sqrt(torch.sum(torch.square(footvel_in_body_frame[:, :, :2]), dim=2)).view(num_envs, -1)
@@ -947,7 +947,7 @@ class RaibertHeuristicReward(ManagerTermBase):
 
         body_frame = torch.zeros(self.num_envs, 4, 3, device=self.asset.device)
         for i in range(4):
-            body_frame[:, i, :] = quat_rotate_inverse(yaw_q, translated[:, i, :])
+            body_frame[:, i, :] = quat_apply_inverse(yaw_q, translated[:, i, :])
 
         # Nominal stance positions for cf_lab foot order [LF, RF, LH, RH]
         W = self.desired_stance_width

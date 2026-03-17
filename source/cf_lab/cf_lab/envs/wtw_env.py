@@ -17,19 +17,33 @@ class ExpNegativeRewardManager(RewardManager):
     """RewardManager with exp_negative reward type support.
 
     When reward_type is "exp_negative", the total reward is computed as:
-        R = sum(positive_terms) * exp(sum(negative_terms) / negative_reward_scale)
+        R = sum(positive_terms * dt) * exp(sum(negative_terms) / sigma)
 
-    This encourages the agent to maximize positive rewards while minimizing negative ones,
-    with the exponential term smoothly scaling down positive rewards when negatives are large.
+    Positive terms are scaled by dt (standard RL reward accumulation).
+    Negative terms go into the exponential WITHOUT dt, so their magnitude
+    is independent of the simulation timestep. sigma is annealed from
+    sigma_start to sigma_end over total_anneal_steps to allow gentle
+    penalties early in training and aggressive enforcement later.
     """
 
     reward_type: str = "exp_negative"
+    sigma_min = 1
+    sigma_max = 5
+    total_anneal_steps: int = 1000
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        self._global_step = 0
 
     def compute(self, dt: float) -> torch.Tensor:
         if self.reward_type != "exp_negative":
             return super().compute(dt)
 
-        # exp_negative: R = sum(positive) * exp(sum(negative) / scale)
+        self._global_step += 1./24
+        progress = min((self._global_step / (0.8*self.total_anneal_steps))**3, 1.0)
+        sigma_exp_neg = self.sigma_min + (self.sigma_max - self.sigma_min) * progress
+
+        # exp_negative: R = sum(positive * dt) * exp(sum(negative) / sigma)
         self._reward_buf[:] = 0.0
         negative_reward = torch.zeros_like(self._reward_buf)
 
@@ -55,7 +69,7 @@ class ExpNegativeRewardManager(RewardManager):
             self._step_reward[:, term_idx] = value / dt
 
         # apply exponential negative scaling
-        self._reward_buf *= torch.exp(negative_reward)
+        self._reward_buf *= torch.exp(negative_reward * sigma_exp_neg)
         return self._reward_buf
 
 
