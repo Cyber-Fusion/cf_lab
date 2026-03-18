@@ -78,6 +78,9 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        self.commands.gait_command.multi_gait = True
+        self.commands.gait_command.binary_phases = True
+        self.commands.gait_command.ranges.frequencies = (2.0, 4.0)
         self.commands.gait_command.ranges.body_pitch = (-0.4, 0.4)
         self.commands.gait_command.ranges.body_roll = (-0.2, 0.2)
 

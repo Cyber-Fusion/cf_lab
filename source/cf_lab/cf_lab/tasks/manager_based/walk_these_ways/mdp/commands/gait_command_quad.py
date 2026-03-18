@@ -19,6 +19,14 @@ class GaitCommandQuad(CommandTerm):
     cfg: UniformGaitCommandCfgQuad
     """The configuration of the command generator."""
 
+    # Canonical gait offsets: (offsets2/RF, offsets3/LH, offsets4/RH)
+    CANONICAL_GAITS = torch.tensor([
+        [0.5, 0.5, 0.0],  # trot
+        [0.5, 0.0, 0.5],  # pace
+        [0.0, 0.5, 0.5],  # bound
+        [0.0, 0.0, 0.0],  # pronk
+    ])
+
     def __init__(self, cfg: UniformGaitCommandCfgQuad, env: ManagerBasedEnv):
         """Initialize the command generator.
 
@@ -36,6 +44,8 @@ class GaitCommandQuad(CommandTerm):
         self.gait_indices = torch.zeros(self.num_envs, device=self.device)
         self.foot_indices = torch.zeros(self.num_envs, 4, device=self.device)
         self.dt = env.step_dt
+        # move canonical gaits to device
+        self._canonical_gaits = self.CANONICAL_GAITS.to(self.device)
         # create metrics dictionary for logging
         self.metrics = {}
 
@@ -65,6 +75,19 @@ class GaitCommandQuad(CommandTerm):
         """
         pass
 
+    def _sample_multi_gait_offsets(self, env_ids):
+        """Sample offsets from canonical gaits for the given environments."""
+        n = len(env_ids)
+        # assign each env to one of 4 gait categories uniformly
+        gait_idx = torch.randint(0, 4, (n,), device=self.device)
+        offsets = self._canonical_gaits[gait_idx]  # (n, 3)
+        # optionally add jitter around canonical values
+        if not self.cfg.binary_phases:
+            jitter = self.cfg.gait_phase_jitter
+            offsets = offsets + torch.empty_like(offsets).uniform_(-jitter, jitter)
+            offsets = torch.remainder(offsets, 1.0)
+        self.gait_command[env_ids, 2:5] = offsets
+
     def _resample_command(self, env_ids):
         """Resample the gait command for specified environments."""
         # sample gait parameters
@@ -73,12 +96,13 @@ class GaitCommandQuad(CommandTerm):
         self.gait_command[env_ids, 0] = r.uniform_(*self.cfg.ranges.frequencies)
         # -- contact duration
         self.gait_command[env_ids, 1] = r.uniform_(*self.cfg.ranges.durations)
-        # -- phase offset2
-        self.gait_command[env_ids, 2] = r.uniform_(*self.cfg.ranges.offsets2)
-        # -- phase offset3
-        self.gait_command[env_ids, 3] = r.uniform_(*self.cfg.ranges.offsets3)
-        # -- phase offset4
-        self.gait_command[env_ids, 4] = r.uniform_(*self.cfg.ranges.offsets4)
+        # -- phase offsets
+        if self.cfg.multi_gait:
+            self._sample_multi_gait_offsets(env_ids)
+        else:
+            self.gait_command[env_ids, 2] = r.uniform_(*self.cfg.ranges.offsets2)
+            self.gait_command[env_ids, 3] = r.uniform_(*self.cfg.ranges.offsets3)
+            self.gait_command[env_ids, 4] = r.uniform_(*self.cfg.ranges.offsets4)
         # -- feet height
         self.gait_command[env_ids, 5] = r.uniform_(*self.cfg.ranges.feet_height)
         # -- base height

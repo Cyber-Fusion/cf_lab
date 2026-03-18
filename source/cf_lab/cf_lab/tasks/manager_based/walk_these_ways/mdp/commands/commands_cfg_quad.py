@@ -40,5 +40,14 @@ class UniformGaitCommandCfgQuad(CommandTermCfg):
     ranges: Ranges = MISSING
     """Distribution ranges for the gait parameters."""
 
+    multi_gait: bool = False
+    """If True, sample from 4 canonical gaits (trot, pace, bound, pronk) instead of uniform offset ranges."""
+
+    binary_phases: bool = True
+    """If True, use exact canonical offsets. If False, add uniform jitter around them."""
+
+    gait_phase_jitter: float = 0.1
+    """Half-width of uniform jitter added to canonical offsets when binary_phases is False."""
+
     resampling_time_range: tuple[float, float] = MISSING
     """Time interval for resampling the gait (in seconds)."""
