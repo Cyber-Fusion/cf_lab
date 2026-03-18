@@ -31,6 +31,10 @@ class UniformGaitCommandCfgQuad(CommandTermCfg):
         """Range for feet height [m]."""
         base_height: tuple[float, float] = MISSING
         """Range for base height [m]."""
+        body_pitch: tuple[float, float] = MISSING
+        """Range for commanded body pitch [rad]."""
+        body_roll: tuple[float, float] = MISSING
+        """Range for commanded body roll [rad]."""
 
 
     ranges: Ranges = MISSING

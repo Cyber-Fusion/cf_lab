@@ -49,7 +49,7 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
 
         self.rewards.lin_vel_z_l2.weight = -0.02
         self.rewards.ang_vel_xy_l2.weight = -0.001
-        self.rewards.flat_orientation_l2.weight = -5.0
+        self.rewards.orientation_control.weight = -5.0
 
         self.rewards.joint_vel_l2.weight = -1.0e-3
         self.rewards.joint_acc_l2.weight = -2.5e-7
@@ -78,6 +78,8 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        self.commands.gait_command.ranges.body_pitch = (-0.4, 0.4)
+        self.commands.gait_command.ranges.body_roll = (-0.2, 0.2)
 
 @configclass
 class AygRoughWTWEnvCfg_PLAY(AygRoughWTWEnvCfg):

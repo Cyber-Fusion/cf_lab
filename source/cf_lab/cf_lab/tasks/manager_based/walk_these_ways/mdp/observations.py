@@ -107,30 +107,26 @@ def robot_center_of_mass(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = Scene
     return com_tensor.view(com_tensor.shape[0], -1)
 
 
-def get_gait_phase(env: ManagerBasedRLEnv) -> torch.Tensor:
-    """Get the current gait phase as observation.
+def get_clock_inputs(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Per-foot clock signals with stance/swing warping.
 
-    The gait phase is represented by [sin(phase), cos(phase)] to ensure continuity.
-    The phase is calculated based on the episode length and gait frequency.
+    Returns sin(2*pi*warped_foot_index) for each of the 4 feet, matching
+    the original Walk These Ways ``clock_inputs``.
 
     Returns:
-        torch.Tensor: The gait phase observation. Shape: (num_envs, 2).
+        torch.Tensor: Shape (num_envs, 4).
     """
-    # check if episode_length_buf is available
-    if not hasattr(env, "episode_length_buf"):
-        return torch.zeros(env.num_envs, 2, device=env.device)
-
-    # Get the gait command from command manager
     command_term = env.command_manager.get_term("gait_command")
-    # Calculate gait indices based on episode length
-    gait_indices = torch.remainder(env.episode_length_buf * env.step_dt * command_term.command[:, 0], 1.0)
-    # Reshape gait_indices to (num_envs, 1)
-    gait_indices = gait_indices.unsqueeze(-1)
-    # Convert to sin/cos representation
-    sin_phase = torch.sin(2 * torch.pi * gait_indices)
-    cos_phase = torch.cos(2 * torch.pi * gait_indices)
+    durations = command_term.command[:, 1]
+    foot_indices = command_term.foot_indices.clone()
 
-    return torch.cat([sin_phase, cos_phase], dim=-1)
+    dur = durations.unsqueeze(1).expand_as(foot_indices)
+    stance = foot_indices < dur
+    swing = foot_indices >= dur
+    foot_indices[stance] = foot_indices[stance] * (0.5 / dur[stance])
+    foot_indices[swing] = 0.5 + (foot_indices[swing] - dur[swing]) * (0.5 / (1 - dur[swing]))
+
+    return torch.sin(2 * torch.pi * foot_indices)
 
 
 def get_gait_command(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.sensors import ContactSensor, RayCaster
-from isaaclab.utils.math import quat_apply_inverse, yaw_quat
+from isaaclab.utils.math import quat_apply_inverse, quat_from_angle_axis, quat_mul, yaw_quat
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -44,6 +44,26 @@ def track_base_height_exp(
     base_height_error = asset.data.root_pos_w[:, 2] - adjusted_target_height
 
     return torch.exp(- torch.square(base_height_error) / std**2)
+
+
+def orientation_control(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Penalize deviation of body orientation from commanded pitch/roll."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    num_envs = env.num_envs
+    commands = env.command_manager.get_command("gait_command")
+    cmd_pitch, cmd_roll = commands[:, 7], commands[:, 8]
+
+    x_axis = torch.tensor([1.0, 0.0, 0.0], device=env.device).expand(num_envs, 3)
+    y_axis = torch.tensor([0.0, 1.0, 0.0], device=env.device).expand(num_envs, 3)
+    quat_r = quat_from_angle_axis(-cmd_roll, x_axis)
+    quat_p = quat_from_angle_axis(-cmd_pitch, y_axis)
+    desired_quat = quat_mul(quat_r, quat_p)
+    gravity = torch.tensor([0.0, 0.0, -1.0], device=env.device).expand(num_envs, 3)
+    desired_grav = quat_apply_inverse(desired_quat, gravity)
+
+    return torch.sum(torch.square(asset.data.projected_gravity_b[:, :2] - desired_grav[:, :2]), dim=1)
 
 
 def feet_slide(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
@@ -138,7 +158,6 @@ class GaitRewardQuad(ManagerTermBase):
 
     def compute_contact_targets(self, gait_params):
         """Calculate desired contact states for the current timestep."""
-        frequencies = gait_params[:, 0]
         durations = torch.cat(
             [
                 gait_params[:, 1].view(self.num_envs, 1),
@@ -148,31 +167,11 @@ class GaitRewardQuad(ManagerTermBase):
             ],
             dim=1,
         )
-        offsets2 = gait_params[:, 2]
-        offsets3 = gait_params[:, 3]
-        offsets4 = gait_params[:, 4]
 
-        assert torch.all(frequencies > 0), "Frequencies must be positive"
-        assert torch.all((offsets2 >= 0) & (offsets2 <= 1)), "Offsets2 must be between 0 and 1"
-        assert torch.all((offsets3 >= 0) & (offsets3 <= 1)), "Offsets3 must be between 0 and 1"
-        assert torch.all((offsets4 >= 0) & (offsets4 <= 1)), "Offsets4 must be between 0 and 1"
         assert torch.all((durations > 0) & (durations < 1)), "Durations must be between 0 and 1"
 
-        gait_indices = torch.remainder(self._env.episode_length_buf * self.dt * frequencies, 1.0)
-
-        # Calculate foot indices
-        foot_indices = torch.remainder(
-            torch.cat(
-                [
-                    gait_indices.view(self.num_envs, 1),
-                    (gait_indices + offsets2 + 1).view(self.num_envs, 1),
-                    (gait_indices + offsets3 + 1).view(self.num_envs, 1),
-                    (gait_indices + offsets4 + 1).view(self.num_envs, 1)
-                ],
-                dim=1,
-            ),
-            1.0,
-        )
+        command_term = self._env.command_manager.get_term("gait_command")
+        foot_indices = command_term.foot_indices.clone()
 
         # Determine stance and swing phases
         stance_idxs = foot_indices < durations
@@ -215,6 +214,7 @@ class GaitRewardQuad(ManagerTermBase):
                 reward += desired_contacts[:, i] * torch.exp(-velocities[:, i] ** 2 / self.vel_sigma)
 
         return (reward / velocities.shape[1]) * self.vel_scale
+
 
 class FootSwingHeightQuad(GaitRewardQuad):
     def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
@@ -278,26 +278,8 @@ class FootClearanceCmdLinearQuad(GaitRewardQuad):
 
     def _compute_unwarped_foot_indices(self, gait_params):
         """Compute per-foot gait indices without stance/swing warping."""
-        frequencies = gait_params[:, 0]
-        offsets2 = gait_params[:, 2]
-        offsets3 = gait_params[:, 3]
-        offsets4 = gait_params[:, 4]
-
-        gait_indices = torch.remainder(self._env.episode_length_buf * self.dt * frequencies, 1.0)
-
-        foot_indices = torch.remainder(
-            torch.cat(
-                [
-                    gait_indices.view(self.num_envs, 1),
-                    (gait_indices + offsets2 + 1).view(self.num_envs, 1),
-                    (gait_indices + offsets3 + 1).view(self.num_envs, 1),
-                    (gait_indices + offsets4 + 1).view(self.num_envs, 1),
-                ],
-                dim=1,
-            ),
-            1.0,
-        )
-        return foot_indices
+        command_term = self._env.command_manager.get_term("gait_command")
+        return command_term.foot_indices.clone()
 
     def __call__(
         self,
@@ -918,24 +900,10 @@ class RaibertHeuristicReward(ManagerTermBase):
     ) -> torch.Tensor:
         gait_params = env.command_manager.get_command(self.command_name)
         frequencies = gait_params[:, 0]
-        offsets2 = gait_params[:, 2]
-        offsets3 = gait_params[:, 3]
-        offsets4 = gait_params[:, 4]
 
-        # Compute raw per-foot gait indices (no stance/swing warping)
-        gait_indices = torch.remainder(self._env.episode_length_buf * self.dt * frequencies, 1.0)
-        foot_indices = torch.remainder(
-            torch.cat(
-                [
-                    gait_indices.view(self.num_envs, 1),
-                    (gait_indices + offsets2 + 1).view(self.num_envs, 1),
-                    (gait_indices + offsets3 + 1).view(self.num_envs, 1),
-                    (gait_indices + offsets4 + 1).view(self.num_envs, 1),
-                ],
-                dim=1,
-            ),
-            1.0,
-        )
+        # Read per-foot gait indices from the command term (incremental, no phase jumps)
+        command_term = self._env.command_manager.get_term("gait_command")
+        foot_indices = command_term.foot_indices.clone()
 
         # Transform foot positions to yaw-only body frame
         foot_pos_w = self.asset.data.body_pos_w[:, self.asset_cfg.body_ids, :]  # (N, 4, 3)

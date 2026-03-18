@@ -104,6 +104,8 @@ class CommandsCfg:
             offsets4=(0.0, 0.0),  # Phase offsets4 range [0-1]
             feet_height=(0.15, 0.15),
             base_height=(0.36, 0.36),
+            body_pitch=(-0.4, -0.4),
+            body_roll=(-0.2, 0.2),
         ),
     )
 
@@ -144,7 +146,7 @@ class ObservationsCfg:
             noise=Unoise(n_min=-0.05, n_max=0.05),
         )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        gait_phase = ObsTerm(func=mdp.get_gait_phase)
+        clock_inputs = ObsTerm(func=mdp.get_clock_inputs)
         gait_command = ObsTerm(func=mdp.get_gait_command, params={"command_name": "gait_command"})
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
@@ -174,7 +176,7 @@ class ObservationsCfg:
             func=mdp.projected_gravity,
         )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        gait_phase = ObsTerm(func=mdp.get_gait_phase)
+        clock_inputs = ObsTerm(func=mdp.get_clock_inputs)
         gait_command = ObsTerm(func=mdp.get_gait_command, params={"command_name": "gait_command"})
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
@@ -307,7 +309,7 @@ class RewardsCfg:
     # -- penalties
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-0.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.0)
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-0.0)
+    orientation_control = RewTerm(func=mdp.orientation_control, weight=-0.0)
 
     joint_deviation_l1 = RewTerm(func=mdp.joint_deviation_l1, weight=-0.0)
     joint_vel_l2 = RewTerm(func=mdp.joint_vel_l2, weight=-0.0)
