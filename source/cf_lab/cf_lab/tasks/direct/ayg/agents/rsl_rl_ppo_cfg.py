@@ -6,7 +6,7 @@ from isaaclab.utils import configclass
 @configclass
 class AygFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 500
+    max_iterations = 2000
     save_interval = 50
     experiment_name = "ayg_flat_direct"
     empirical_normalization = False
