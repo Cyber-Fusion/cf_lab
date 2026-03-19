@@ -29,7 +29,7 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
 
         # event
         self.events.push_robot = None
-        self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
+        self.events.add_base_mass.params["mass_distribution_params"] = (2.0, 3.0)
         self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
         self.events.reset_base.params = {
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
@@ -58,27 +58,35 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.rewards.base_height_l2.weight = -0.2
         self.rewards.feet_slip.weight = -8.0e-4
 
-        self.rewards.action_rate_l2.weight = -2.0e-3
-        self.rewards.action_smoothness_l2.weight = -2.0e-3
+        self.rewards.action_rate_l2.weight = -2.0e-5
+        self.rewards.action_smoothness_l2.weight = -2.0e-5
 
         self.rewards.feet_air_time.weight = -0.0
         self.rewards.undesired_contacts.weight = -1.0
 
         self.rewards.gait.weight = 0.5
-        self.rewards.footswing_height.weight = -5.0
+        self.rewards.footswing_height.weight = -2.0
         self.rewards.foot_clearance.weight = 0.0
 
         # WTW augmented auxiliary
-        self.rewards.body_pitch_tracking.weight = -0.1
-        self.rewards.raibert_heuristic.weight = -0.2
+        self.rewards.body_pitch_tracking.weight = 0.0
+        self.rewards.raibert_heuristic.weight = 0.0
 
         self.rewards.stand_when_zero_command.weight = -0.01
         self.rewards.stand_still_when_zero_command.weight = -0.01
 
         # Commands
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+
+        # Gait command ranges tuned for AYG (heavier, slower joints than Go1)
+        self.commands.gait_command.ranges.frequency = (1.5, 3.0)
+        self.commands.gait_command.ranges.base_height = (0.28, 0.38)
+
+        # Velocity curriculum caps (AYG can't reach Go1 speeds)
+        self.curriculum.velocity_curriculum.params["max_lin_vel_x"] = 1.5
+        self.curriculum.velocity_curriculum.params["max_lin_vel_y"] = 0.5
 
 @configclass
 class AygRoughWTWEnvCfg_PLAY(AygRoughWTWEnvCfg):

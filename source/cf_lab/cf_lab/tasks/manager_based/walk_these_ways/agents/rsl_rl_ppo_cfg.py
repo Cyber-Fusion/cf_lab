@@ -59,7 +59,7 @@ class AygFlatWTWPPORunnerCfg(AygRoughWTWPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 10000
+        self.max_iterations = 2000
         self.experiment_name = "ayg_wtw_flat"
         self.policy.actor_hidden_dims = [512, 256, 128]
         self.policy.critic_hidden_dims = [512, 256, 128]

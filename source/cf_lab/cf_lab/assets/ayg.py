@@ -23,10 +23,10 @@ from cf_lab import CF_LAB_DATA_DIR
 AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DCMotorCfg(
     joint_names_expr=[".*HAA", ".*HFE", ".*KFE"],
     saturation_effort=60.0,
-    effort_limit=30.0,
-    velocity_limit=20.0,
-    stiffness=40.0,
-    damping=1.0,
+    effort_limit=50.0,
+    velocity_limit=10.0,
+    stiffness=50.0,
+    damping=3.0,
     friction=0.0,
 )
 """Configuration for AYG's motor with DC actuator model."""
@@ -64,7 +64,10 @@ AYG_CFG = ArticulationCfg(
         joint_pos={
             ".*HAA": 0.0,       # all HAA
             ".*HFE": 0.0,       # all HFE
-            ".*KFE": 0.0,       # all KFE
+            "LF_KFE": -0.2,     # front knees slightly bent
+            "RF_KFE": -0.2,
+            "LH_KFE": -0.25,    # hind knees slightly more bent
+            "RH_KFE": -0.25,
         },
         joint_vel={".*": 0.0},
     ),
