@@ -12,6 +12,8 @@ import torch
 from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.managers import RewardManager
 
+from cf_lab.tasks.manager_based.walk_these_ways.wtw_env_cfg import RewardType
+
 
 class ExpNegativeRewardManager(RewardManager):
     """RewardManager with exp_negative reward type support.
@@ -26,24 +28,19 @@ class ExpNegativeRewardManager(RewardManager):
     penalties early in training and aggressive enforcement later.
     """
 
-    reward_type: str = "exp_negative"
-    sigma_min = 1
-    sigma_max = 5
-    total_anneal_steps: int = 1000
-
-    def __init__(self, cfg, env):
+    def __init__(self, cfg, env, sigma_min=1.0, sigma_max=5.0, total_anneal_steps=1000):
         super().__init__(cfg, env)
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+        self.total_anneal_steps = total_anneal_steps
         self._global_step = 0
 
     def compute(self, dt: float) -> torch.Tensor:
-        if self.reward_type != "exp_negative":
-            return super().compute(dt)
-
-        self._global_step += 1./24
-        progress = min((self._global_step / (0.8*self.total_anneal_steps))**3, 1.0)
+        self._global_step += 1.0 / 24
+        progress = min((self._global_step / (self.total_anneal_steps)) ** 2, 1.0)
         sigma_exp_neg = self.sigma_min + (self.sigma_max - self.sigma_min) * progress
 
-        # exp_negative: R = sum(positive * dt) * exp(sum(negative) / sigma)
+        # R = sum(additive * dt) * exp(sum(exp_negative * dt) * sigma)
         self._reward_buf[:] = 0.0
         negative_reward = torch.zeros_like(self._reward_buf)
 
@@ -57,10 +54,12 @@ class ExpNegativeRewardManager(RewardManager):
             value = term_cfg.func(self._env, **term_cfg.params) * term_cfg.weight * dt
             value = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
 
-            # separate positive and negative components
-            positive_reward = torch.clip(value, min=0.0)
-            negative_reward += torch.clip(value, max=0.0)
-            self._reward_buf += positive_reward
+            # route based on per-term reward type
+            reward_type = getattr(term_cfg, "reward_type", None)
+            if reward_type == RewardType.EXP_NEGATIVE:
+                negative_reward += value
+            else:
+                self._reward_buf += value
 
             # update episodic sum
             self._episode_sums[name] += value
@@ -85,4 +84,10 @@ class WTWManagerBasedRLEnv(ManagerBasedRLEnv):
         super().load_managers()
         # Replace reward manager with custom one that supports exp_negative
         del self.reward_manager
-        self.reward_manager = ExpNegativeRewardManager(self.cfg.rewards, self)
+        self.reward_manager = ExpNegativeRewardManager(
+            self.cfg.rewards,
+            self,
+            sigma_min=getattr(self.cfg, "sigma_min", 1.0),
+            sigma_max=getattr(self.cfg, "sigma_max", 5.0),
+            total_anneal_steps=getattr(self.cfg, "total_anneal_steps", 1000),
+        )

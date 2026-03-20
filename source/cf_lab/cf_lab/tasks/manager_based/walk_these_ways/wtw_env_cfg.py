@@ -5,6 +5,7 @@
 
 import math
 from dataclasses import MISSING
+from enum import Enum
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -31,6 +32,20 @@ from cf_lab.tasks.manager_based.walk_these_ways import mdp
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 from cf_lab.tasks.manager_based.walk_these_ways.wtw_params import WalkTheseWaysParams as Params
+
+
+class RewardType(Enum):
+    """Enum for reward term computation type."""
+
+    ADDITIVE = "additive"
+    EXP_NEGATIVE = "exp_negative"
+
+
+@configclass
+class WtwRewTerm(RewTerm):
+    """Reward term with explicit reward type declaration."""
+
+    reward_type: RewardType = RewardType.ADDITIVE
 
 
 ##
@@ -97,13 +112,13 @@ class CommandsCfg:
         resampling_time_range=(5.0, 5.0),  # Fixed resampling time of 5 seconds
         debug_vis=False,  # No debug visualization needed
         ranges=mdp.UniformGaitCommandCfgQuad.Ranges(
-            frequencies=(2.0, 2.0),  # Gait frequency range [Hz]
+            frequencies=(2.0, 4.0),  # Gait frequency range [Hz]
             durations=(0.5, 0.5),  # Contact duration range [0-1]
             offsets2=(0.5, 0.5),  # Phase offsets2 range [0-1]
-            offsets3=(0.5, 0.5),  # Phase offsets3 range [0-1]
+            offsets3=(0.0, 0.0),  # Phase offsets3 range [0-1]
             offsets4=(0.0, 0.0),  # Phase offsets4 range [0-1]
-            feet_height=(0.15, 0.15),
-            base_height=(0.36, 0.36),
+            feet_height=(0.05, 0.2),
+            base_height=(0.20, 0.40),
             body_pitch=(-0.4, -0.4),
             body_roll=(-0.2, 0.2),
         ),
@@ -297,35 +312,40 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # -- task
-    track_lin_vel_xy_exp = RewTerm(
-        func=mdp.track_lin_vel_xy_exp, weight=1.0,
-        params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    track_lin_vel_xy_exp = WtwRewTerm(
+        func=mdp.track_lin_vel_xy_exp,
+        weight=1.0,
+        params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
+        reward_type=RewardType.ADDITIVE,
     )
-    track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_exp, weight=0.5,
-        params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+    track_ang_vel_z_exp = WtwRewTerm(
+        func=mdp.track_ang_vel_z_exp,
+        weight=0.5,
+        params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
+        reward_type=RewardType.ADDITIVE,
     )
 
     # -- penalties
-    lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-0.0)
-    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.0)
-    orientation_control = RewTerm(func=mdp.orientation_control, weight=-0.0)
+    lin_vel_z_l2 = WtwRewTerm(func=mdp.lin_vel_z_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
+    ang_vel_xy_l2 = WtwRewTerm(func=mdp.ang_vel_xy_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
+    orientation_control = WtwRewTerm(func=mdp.orientation_control, weight=-0.0, reward_type=RewardType.EXP_NEGATIVE)
 
-    joint_deviation_l1 = RewTerm(func=mdp.joint_deviation_l1, weight=-0.0)
-    joint_vel_l2 = RewTerm(func=mdp.joint_vel_l2, weight=-0.0)
-    joint_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-0.0)
-    joint_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-0.0)
+    joint_deviation_l1 = WtwRewTerm(func=mdp.joint_deviation_l1, weight=-0.0, reward_type=RewardType.ADDITIVE)
+    joint_vel_l2 = WtwRewTerm(func=mdp.joint_vel_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
+    joint_acc_l2 = WtwRewTerm(func=mdp.joint_acc_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
+    joint_torques_l2 = WtwRewTerm(func=mdp.joint_torques_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
 
-    base_height_l2 = RewTerm(
+    base_height_l2 = WtwRewTerm(
         func=mdp.base_height_l2,
         weight=-0.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name),
             "sensor_cfg": Params.height_scanner,
-        }
+        },
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
-    foot_clearance = RewTerm(
+    foot_clearance = WtwRewTerm(
         func=mdp.FootClearanceCmdLinearQuad,
         weight=-0.0,
         params={
@@ -339,24 +359,27 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
         },
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
-    feet_slip = RewTerm(
+    feet_slip = WtwRewTerm(
         func=mdp.feet_slide,
         weight=-0.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
         },
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.0)
-    action_smoothness_l2 = RewTerm(
+    action_rate_l2 = WtwRewTerm(func=mdp.action_rate_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
+    action_smoothness_l2 = WtwRewTerm(
         func=mdp.ActionSmoothnessPenalty,
         weight=-0.0,
+        reward_type=RewardType.ADDITIVE,
     )
 
-    feet_air_time = RewTerm(
+    feet_air_time = WtwRewTerm(
         func=mdp.air_time_reward,
         weight=0.0,
         params={
@@ -365,30 +388,37 @@ class RewardsCfg:
             "mode_time": 0.3,
             "velocity_threshold": 0.1,
         },
+        reward_type=RewardType.ADDITIVE,
     )
-    undesired_contacts = RewTerm(
+    undesired_contacts = WtwRewTerm(
         func=mdp.undesired_contacts,
         weight=-1.0,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.undesired_contact_names), "threshold": 1.0},
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.undesired_contact_names),
+            "threshold": 1.0,
+        },
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
-    dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
+    dof_pos_limits = WtwRewTerm(func=mdp.joint_pos_limits, weight=0.0, reward_type=RewardType.ADDITIVE)
 
-    stand_when_zero_command = RewTerm(
+    stand_when_zero_command = WtwRewTerm(
         func=mdp.stand_when_zero_command,
         weight=-0.0,
         params={"command_name": "base_velocity"},
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
-    stand_still_when_zero_command = RewTerm(
+    stand_still_when_zero_command = WtwRewTerm(
         func=mdp.stand_still_when_zero_command,
         weight=-0.0,
         params={"command_name": "base_velocity"},
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
     # ======================================================================= #
 
-    gait = RewTerm(
+    gait = WtwRewTerm(
         func=mdp.GaitRewardQuad,
         weight=0.0,
         params={
@@ -401,9 +431,10 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
         },
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
-    raibert_heuristic = RewTerm(
+    raibert_heuristic = WtwRewTerm(
         func=mdp.RaibertHeuristicReward,
         weight=0.0,
         params={
@@ -412,9 +443,10 @@ class RewardsCfg:
             "desired_stance_width": 0.3,
             "desired_stance_length": 0.55,
         },
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
-    footswing_height = RewTerm(
+    footswing_height = WtwRewTerm(
         func=mdp.FootSwingHeightQuad,
         weight=-0.0,
         params={
@@ -429,6 +461,7 @@ class RewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
             "height_scanner_cfg": Params.height_scanner,
         },
+        reward_type=RewardType.EXP_NEGATIVE,
     )
 
 
@@ -439,7 +472,10 @@ class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.termination_contact_names), "threshold": 1.0},
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.termination_contact_names),
+            "threshold": 1.0,
+        },
     )
     simulation_crashed = DoneTerm(
         func=mdp.simulation_crashed,
@@ -474,6 +510,11 @@ class LocomotionWalkTheseWaysRoughEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
     events: EventCfg = EventCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
+
+    # Reward computation settings
+    sigma_min: float = 1.0
+    sigma_max: float = 20.0
+    total_anneal_steps: int = 1000
 
     def __post_init__(self):
         """Post initialization."""
