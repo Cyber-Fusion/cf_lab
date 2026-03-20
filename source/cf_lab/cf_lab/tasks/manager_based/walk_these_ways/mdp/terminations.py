@@ -21,6 +21,23 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+def bad_orientation(
+    env: ManagerBasedRLEnv, limit_angle: float = 0.5, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Terminate when the robot tilts too far from upright.
+
+    Checks the z-component of the projected gravity vector in body frame.
+    When upright, projected_gravity_b ≈ [0, 0, -1], so gz ≈ -1.
+    When tilted by angle θ, gz = -cos(θ).
+    Terminate if cos(θ) < cos(limit_angle), i.e. gz > -cos(limit_angle).
+    """
+    asset: RigidObject = env.scene[asset_cfg.name]
+    # projected_gravity_b[:, 2] is the z-component: -1 when upright, 0 when sideways, +1 when flipped
+    gz = asset.data.projected_gravity_b[:, 2]
+    import math
+    return gz > -math.cos(limit_angle)
+
+
 def simulation_crashed(
     env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), threshold: float = 0.5
 ) -> torch.Tensor:

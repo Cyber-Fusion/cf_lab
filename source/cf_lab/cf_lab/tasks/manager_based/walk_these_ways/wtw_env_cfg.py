@@ -139,8 +139,8 @@ class ObservationsCfg:
         """Observations for policy group."""
 
         # observation terms (order preserved)
-        # o_t = {joint_pos, joint_vel, gravity}
-        # base_ang_vel intentionally excluded — velocity is predicted by state estimator.
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
@@ -161,9 +161,6 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
-            # 30-step observation history
-            self.history_length = 30
-            self.flatten_history_dim = True
 
     @configclass
     class CriticCfg(ObsGroup):
@@ -191,9 +188,6 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
-            # Critic also uses 30-step history
-            self.history_length = 30
-            self.flatten_history_dim = True
 
     @configclass
     class EstimatorGtCfg(ObsGroup):
@@ -253,8 +247,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
-            "stiffness_distribution_params": (45, 55),
-            "damping_distribution_params": (2.5, 3.5),
+            "stiffness_distribution_params": (35, 65),
+            "damping_distribution_params": (2.0, 4.0),
             "operation": "abs",
             "distribution": "uniform",
         },
@@ -265,7 +259,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot"),
-            "com_distribution_params": ((-0.02, 0.02), (-0.02, 0.02), (-0.02, 0.02)),
+            "com_distribution_params": ((-0.05, 0.05), (-0.05, 0.05), (-0.05, 0.05)),
             "operation": "add",
             "distribution": "uniform",
         },
@@ -471,6 +465,14 @@ class TerminationsCfg:
         func=mdp.illegal_contact,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.base_name), "threshold": 1.0},
     )
+    shank_thigh_contact = DoneTerm(
+        func=mdp.illegal_contact,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.undesired_contact_names), "threshold": 1.0},
+    )
+    bad_orientation = DoneTerm(
+        func=mdp.bad_orientation,
+        params={"limit_angle": 0.5, "asset_cfg": SceneEntityCfg("robot")},
+    )
     simulation_crashed = DoneTerm(
         func=mdp.simulation_crashed,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name), "threshold": 0.5},
@@ -482,6 +484,16 @@ class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+
+    # Anneal sigma_exp_neg: penalties start weak (focus on tracking) → grow strong (refine gait)
+    sigma_exp_neg_anneal = CurrTerm(
+        func=mdp.anneal_sigma_exp_neg,
+        params={
+            "start_val": 0.02,
+            "end_val": 0.3,
+            "anneal_steps": 80000,
+        },
+    )
 
     # Progressive velocity command range expansion
     velocity_curriculum = CurrTerm(

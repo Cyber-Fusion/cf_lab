@@ -117,3 +117,31 @@ def velocity_command_curriculum(
         cmd_term.cfg.ranges.ang_vel_z = (-new_max_z, new_max_z)
 
     return cmd_term.cfg.ranges.lin_vel_x[1]
+
+
+def anneal_sigma_exp_neg(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    start_val: float = 0.02,
+    end_val: float = 0.5,
+    anneal_steps: int = 120000,
+) -> float:
+    """Linearly anneal the WTW exponential penalty coefficient (sigma_exp_neg).
+
+    Starts with a low c_aux (penalties nearly invisible, policy focuses on velocity tracking)
+    and gradually increases to a high value (penalties dominate, policy refines gait quality).
+
+    Args:
+        env: The learning environment.
+        env_ids: Not used directly, but required by curriculum interface.
+        start_val: Starting c_aux value (low = weak penalties).
+        end_val: Final c_aux value (high = strong penalties).
+        anneal_steps: Number of env steps over which to linearly anneal.
+
+    Returns:
+        The current c_aux value (for logging).
+    """
+    progress = min(env.common_step_counter / anneal_steps, 1.0)
+    new_val = start_val + progress * (end_val - start_val)
+    env.reward_manager.c_aux = new_val
+    return new_val
