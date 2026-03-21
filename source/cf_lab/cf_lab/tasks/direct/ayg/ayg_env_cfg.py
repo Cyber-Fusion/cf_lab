@@ -110,17 +110,30 @@ class AygFlatEnvCfg(DirectRLEnvCfg):
     enable_obs_noise = True
 
     # reward scales
-    lin_vel_reward_scale = 2.0
-    yaw_rate_reward_scale = 1.0
+    lin_vel_reward_scale = 3.5
+    yaw_rate_reward_scale = 1.75
     z_vel_reward_scale = -2.0
-    ang_vel_reward_scale = -0.05
-    joint_torque_reward_scale = -0.0002
+    ang_vel_reward_scale = -0.03
+    joint_torque_reward_scale = -0.0001
     joint_accel_reward_scale = -2.5e-7
-    action_rate_reward_scale = -0.01
-    feet_air_time_reward_scale = 0.25
+    action_rate_reward_scale = -0.02
+    feet_air_time_reward_scale = 1.0
     undesired_contact_reward_scale = -0.25
     flat_orientation_reward_scale = -2.5
-    feet_regulation_reward_scale = -0.05
+    feet_regulation_reward_scale = -0.08
+    base_height_reward_scale = -5.0
+
+    # reward parameters
+    feet_air_time_threshold = 0.1  # seconds: feet in air longer than this are rewarded
+    base_height_target = 0.30  # meters: target base height above ground
+
+
+@configclass
+class AygFlatEnvPlayCfg(AygFlatEnvCfg):
+    # smaller scene for play / video recording
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=50, env_spacing=2.5, replicate_physics=True)
+    # disable observation noise for play
+    enable_obs_noise = False
 
 
 @configclass

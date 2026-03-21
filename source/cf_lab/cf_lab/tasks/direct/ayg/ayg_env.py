@@ -58,6 +58,7 @@ class AygEnv(DirectRLEnv):
                 "undesired_contacts",
                 "flat_orientation_l2",
                 "feet_regulation",
+                "base_height",
             ]
         }
         # Get specific body indices
@@ -169,7 +170,7 @@ class AygEnv(DirectRLEnv):
         # feet air time
         first_contact = self._contact_sensor.compute_first_contact(self.step_dt)[:, self._feet_ids]
         last_air_time = self._contact_sensor.data.last_air_time[:, self._feet_ids]
-        air_time = torch.sum((last_air_time - 0.5) * first_contact, dim=1) * (
+        air_time = torch.sum((last_air_time - self.cfg.feet_air_time_threshold) * first_contact, dim=1) * (
             torch.norm(self._commands[:, :2], dim=1) > 0.1
         )
         # undesired contacts
@@ -188,6 +189,10 @@ class AygEnv(DirectRLEnv):
         exp_term = torch.clamp(exp_term, min=0.001, max=10.0)
         feet_reg = torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
 
+        # base height
+        base_height = self._robot.data.root_pos_w[:, 2]
+        base_height_error = torch.square(base_height - self.cfg.base_height_target)
+
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
@@ -200,6 +205,7 @@ class AygEnv(DirectRLEnv):
             "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
             "feet_regulation": feet_reg * self.cfg.feet_regulation_reward_scale * self.step_dt,
+            "base_height": base_height_error * self.cfg.base_height_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging

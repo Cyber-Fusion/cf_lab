@@ -1,0 +1,6 @@
+{
+  "feet_air_time_reward_scale": 1.0,
+  "feet_air_time_threshold": 0.25,
+  "base_height_reward_scale": -5.0,
+  "base_height_target": 0.30
+}

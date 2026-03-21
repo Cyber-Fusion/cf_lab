@@ -1,0 +1,9 @@
+{
+  "feet_air_time_reward_scale": 0.0,
+  "lin_vel_reward_scale": 3.0,
+  "yaw_rate_reward_scale": 1.5,
+  "joint_torque_reward_scale": -0.0001,
+  "action_rate_reward_scale": -0.02,
+  "feet_regulation_reward_scale": -0.08,
+  "agent.algorithm.entropy_coef": 0.008
+}
