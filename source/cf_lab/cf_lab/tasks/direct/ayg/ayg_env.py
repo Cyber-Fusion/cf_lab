@@ -58,6 +58,7 @@ class AygEnv(DirectRLEnv):
                 "undesired_contacts",
                 "flat_orientation_l2",
                 "feet_regulation",
+                "foot_clearance",
                 "base_height",
             ]
         }
@@ -170,9 +171,9 @@ class AygEnv(DirectRLEnv):
         # feet air time
         first_contact = self._contact_sensor.compute_first_contact(self.step_dt)[:, self._feet_ids]
         last_air_time = self._contact_sensor.data.last_air_time[:, self._feet_ids]
-        air_time = torch.sum((last_air_time - self.cfg.feet_air_time_threshold) * first_contact, dim=1) * (
-            torch.norm(self._commands[:, :2], dim=1) > 0.1
-        )
+        air_time = torch.sum(
+            torch.clamp(last_air_time - self.cfg.feet_air_time_threshold, min=0.0) * first_contact, dim=1
+        ) * (torch.norm(self._commands[:, :2], dim=1) > 0.1)
         # undesired contacts
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
         is_contact = (
@@ -188,6 +189,15 @@ class AygEnv(DirectRLEnv):
         exp_term = torch.exp(-feet_pos_z / (0.025 * 0.65))
         exp_term = torch.clamp(exp_term, min=0.001, max=10.0)
         feet_reg = torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
+
+        # foot clearance: reward feet for achieving target height during swing phase
+        current_air_time = self._contact_sensor.data.current_air_time[:, self._feet_ids]
+        is_in_swing = current_air_time > 0.0
+        # Reward: exp(-|feet_z - target|/sigma) for swing feet, only when moving
+        clearance_error = torch.square(feet_pos_z - self.cfg.foot_clearance_target)
+        foot_clearance = torch.sum(torch.exp(-clearance_error / 0.005) * is_in_swing.float(), dim=1) * (
+            torch.norm(self._commands[:, :2], dim=1) > 0.1
+        )
 
         # base height
         base_height = self._robot.data.root_pos_w[:, 2]
@@ -205,6 +215,7 @@ class AygEnv(DirectRLEnv):
             "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
             "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
             "feet_regulation": feet_reg * self.cfg.feet_regulation_reward_scale * self.step_dt,
+            "foot_clearance": foot_clearance * self.cfg.foot_clearance_reward_scale * self.step_dt,
             "base_height": base_height_error * self.cfg.base_height_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)

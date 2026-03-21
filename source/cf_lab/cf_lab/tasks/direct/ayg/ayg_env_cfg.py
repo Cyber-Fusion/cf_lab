@@ -112,19 +112,23 @@ class AygFlatEnvCfg(DirectRLEnvCfg):
     # reward scales
     lin_vel_reward_scale = 3.5
     yaw_rate_reward_scale = 1.75
-    z_vel_reward_scale = -2.0
-    ang_vel_reward_scale = -0.03
+    z_vel_reward_scale = -4.0
+    ang_vel_reward_scale = -0.06
     joint_torque_reward_scale = -0.0001
     joint_accel_reward_scale = -2.5e-7
-    action_rate_reward_scale = -0.02
-    feet_air_time_reward_scale = 1.0
+    action_rate_reward_scale = -0.06
+    feet_air_time_reward_scale = 5.0
     undesired_contact_reward_scale = -0.25
-    flat_orientation_reward_scale = -2.5
-    feet_regulation_reward_scale = -0.08
+    flat_orientation_reward_scale = -5.0
+    feet_regulation_reward_scale = -0.15
     base_height_reward_scale = -5.0
 
+    # foot clearance reward
+    foot_clearance_reward_scale = 0.35
+    foot_clearance_target = 0.04  # meters: target foot height during swing phase
+
     # reward parameters
-    feet_air_time_threshold = 0.1  # seconds: feet in air longer than this are rewarded
+    feet_air_time_threshold = 0.08  # seconds: feet in air longer than this are rewarded
     base_height_target = 0.30  # meters: target base height above ground
 
 
