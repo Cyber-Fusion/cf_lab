@@ -22,14 +22,23 @@ from cf_lab import CF_LAB_DATA_DIR
 
 AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DCMotorCfg(
     joint_names_expr=[".*HAA", ".*HFE", ".*KFE"],
+    # Robstride 03 motor specs:
+    #   Source: Ayg/src/libs/robstride_sdk/include/robstride_sdk/types.hpp
+    #   Source: kscale metadata.json (vendor-confirmed values)
+    #   Max torque: 60 Nm, Max velocity: 18.849 rad/s (~6π), Max Kp: 5000, Max Kd: 100
+    #   Armature (rotor inertia): 0.02 kg·m², Friction loss (Coulomb): 0.2 Nm
+    # Real HW PD gains (from Ayg/src/control/ayg_control/config/ayg_hw_controllers.yaml):
+    #   Kp: 50.0, Kd: 3.0, Ki: 0.0 — all joints
+    # Real HW control frequency: 160 Hz, HW velocity safety limit: 5.0 rad/s
     saturation_effort=60.0,
     effort_limit=50.0,
-    velocity_limit=10.0,
+    velocity_limit=18.849,
     stiffness=50.0,
     damping=3.0,
-    friction=0.0,
+    armature=0.02,
+    friction=0.2,
 )
-"""Configuration for AYG's motor with DC actuator model."""
+"""Configuration for AYG's motor with DC actuator model (Robstride 03)."""
 
 
 ##
