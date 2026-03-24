@@ -6,7 +6,7 @@
 """Orchestrate a single auto-training phase: train → metrics → play → frames → report.
 
 This script runs as a normal Python process (no Isaac Sim dependency). It launches
-train_with_overrides.py and play.py as subprocesses and coordinates the pipeline.
+train_with_overrides.py and play_for_inspection.py as subprocesses and coordinates the pipeline.
 
 Usage:
     python .claude/skills/auto_train/resources/run_phase.py \
@@ -253,7 +253,10 @@ def main():
 
     # Play / video
     parser.add_argument("--video-length", type=int, default=300, help="Play video length in steps.")
-    parser.add_argument("--num-frames", type=int, default=8, help="Number of frames to extract from play video.")
+    parser.add_argument("--num-frames", type=int, default=12, help="Number of frames to extract from play video.")
+    parser.add_argument("--num-play-envs", type=int, default=4,
+                        help="Number of environments for play/video recording (default: 4). "
+                             "Use 2-4 for clear side-view video of individual robots.")
     parser.add_argument("--skip-play", action="store_true", default=False, help="Skip play and video extraction.")
 
     # Monitoring / abort criteria
@@ -531,14 +534,13 @@ def main():
         checkpoint = find_latest_checkpoint(log_dir)
         if checkpoint:
             play_cmd = [
-                sys.executable, os.path.join(cf_lab_dir, "scripts", "rsl_rl", "play.py"),
+                sys.executable, os.path.join(script_dir, "play_for_inspection.py"),
                 f"--task={args.play_task}",
                 "--video",
                 f"--video_length={args.video_length}",
                 f"--checkpoint={checkpoint}",
+                f"--num_envs={args.num_play_envs}",
             ]
-            if args.num_envs is not None:
-                play_cmd.append(f"--num_envs={min(args.num_envs, 50)}")
             if args.headless:
                 play_cmd.append("--headless")
 
@@ -591,6 +593,32 @@ def main():
         with open(args.overrides_file) as f:
             overrides_applied = json.load(f)
 
+    # Extract convergence summary from metrics
+    convergence_summary = {}
+    suspicious_patterns = []
+    if metrics_data:
+        for term_name, term_data in metrics_data.get("reward_terms", {}).items():
+            shape = term_data.get("curve_shape", "")
+            if shape in ("converged_early", "degrading", "oscillating", "still_improving"):
+                convergence_summary[term_name] = {
+                    "curve_shape": shape,
+                    "converged_at_iteration": term_data.get("converged_at_iteration"),
+                    "percent_of_training_at_convergence": term_data.get("percent_of_training_at_convergence"),
+                    "final": term_data.get("final"),
+                }
+        # Also capture the main reward curve shape
+        for key in ("Train/mean_reward", "Train/reward"):
+            if key in metrics_data.get("scalars", {}):
+                sdata = metrics_data["scalars"][key]
+                convergence_summary["_mean_reward"] = {
+                    "curve_shape": sdata.get("curve_shape"),
+                    "converged_at_iteration": sdata.get("converged_at_iteration"),
+                    "percent_of_training_at_convergence": sdata.get("percent_of_training_at_convergence"),
+                    "final": sdata.get("final"),
+                }
+                break
+        suspicious_patterns = metrics_data.get("suspicious_patterns", [])
+
     report = {
         "status": status,
         "early_stop_reason": early_stop_reason,
@@ -600,8 +628,11 @@ def main():
         "iterations_completed": iterations_completed,
         "max_iterations": args.max_iterations,
         "num_envs": args.num_envs,
+        "num_play_envs": args.num_play_envs,
         "overrides_applied": overrides_applied,
         "metrics": metrics_data,
+        "convergence_summary": convergence_summary,
+        "suspicious_patterns": suspicious_patterns,
         "video_frames_dir": video_frames_dir,
         "frame_paths": frame_paths,
         "training_time_seconds": round(training_time, 1),
@@ -623,12 +654,38 @@ def main():
     if early_stop_reason:
         print(f"[DONE] Early stop reason: {early_stop_reason}")
 
+    # Print health summary for quick assessment
+    if metrics_data:
+        health_parts = []
+        # Total reward
+        for key in ("Train/mean_reward", "Train/reward"):
+            if key in metrics_data.get("scalars", {}):
+                s = metrics_data["scalars"][key]
+                conv = s.get("converged_at_iteration")
+                conv_str = f"converged@{conv}" if conv else s.get("curve_shape", "?")
+                mean_r = s.get("mean_last_100")
+                mean_r_str = f"{mean_r:.1f}" if isinstance(mean_r, (int, float)) else "?"
+                health_parts.append(f"reward: {mean_r_str} ({conv_str})")
+                break
+        # Velocity tracking terms
+        for term_name, term_data in metrics_data.get("reward_terms", {}).items():
+            if any(kw in term_name.lower() for kw in ("track_lin_vel", "track_ang_vel")):
+                val = term_data.get("mean_last_100", 0) or 0
+                shape = term_data.get("curve_shape", "?")
+                label = "vel_xy" if "lin" in term_name.lower() else "vel_yaw"
+                status_str = "BLOCKING" if val < 0.3 else ("NEEDS_WORK" if val < 0.6 else shape)
+                health_parts.append(f"{label}: {val:.3f} ({status_str})")
+        # Suspicious patterns count
+        health_parts.append(f"suspicious: {len(suspicious_patterns)}")
+        if health_parts:
+            print(f"[HEALTH] {' | '.join(health_parts)}")
+
 
 def main_safe():
     """Wrapper that guarantees the external report file reflects crashes."""
     try:
         main()
-    except Exception as e:
+    except BaseException as e:
         # If --report-path was given, write a crash report so the caller isn't stuck polling
         for arg in sys.argv:
             if arg.startswith("--report-path"):

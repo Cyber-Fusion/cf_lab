@@ -13,39 +13,44 @@ from .gait_command_quad import GaitCommandQuad
 
 @configclass
 class UniformGaitCommandCfgQuad(CommandTermCfg):
-    """Configuration for the WTW gait command generator (8D behavior vector).
+    """Configuration for the WTW gait command generator (9D behavior vector).
 
-    Command layout: [theta1, theta2, theta3, frequency, base_height, body_pitch, stance_width, footswing_height]
+    Command layout: [freq, dur, off2, off3, off4, feet_h, base_h, pitch, roll]
 
-    theta1/theta2/theta3 are phase offset parameters that encode quadruped gaits:
-        - Trot:    (0.5, 0.0, 0.0)
-        - Pronk:   (0.0, 0.0, 0.0)
-        - Bound:   (0.0, 0.5, 0.0)
-        - Pace:    (0.0, 0.0, 0.5)
+    Phase offsets are direct per-foot offsets relative to the reference foot (LF):
+        off2 = RF offset, off3 = LH offset, off4 = RH offset
+
+    Canonical quadruped gaits (off2, off3, off4):
+        - Trot:  (0.5, 0.5, 0.0)
+        - Pace:  (0.5, 0.0, 0.5)
+        - Bound: (0.0, 0.5, 0.5)
+        - Pronk: (0.0, 0.0, 0.0)
     """
 
     class_type: type = GaitCommandQuad
 
     @configclass
     class Ranges:
-        """Uniform distribution ranges for the 8D behavior parameters."""
+        """Uniform distribution ranges for the 9D behavior parameters."""
 
-        theta1: tuple[float, float] = MISSING
-        """Range for phase offset parameter 1 [0-1]."""
-        theta2: tuple[float, float] = MISSING
-        """Range for phase offset parameter 2 [0-1]."""
-        theta3: tuple[float, float] = MISSING
-        """Range for phase offset parameter 3 [0-1]."""
-        frequency: tuple[float, float] = MISSING
+        frequencies: tuple[float, float] = MISSING
         """Range for gait stepping frequency [Hz]."""
+        durations: tuple[float, float] = MISSING
+        """Range for stance duty cycle [0-1]."""
+        offsets2: tuple[float, float] = MISSING
+        """Range for RF foot phase offset [0-1]."""
+        offsets3: tuple[float, float] = MISSING
+        """Range for LH foot phase offset [0-1]."""
+        offsets4: tuple[float, float] = MISSING
+        """Range for RH foot phase offset [0-1]."""
+        feet_height: tuple[float, float] = MISSING
+        """Range for foot swing height command [m]."""
         base_height: tuple[float, float] = MISSING
         """Range for body height command [m]."""
         body_pitch: tuple[float, float] = MISSING
         """Range for body pitch command [rad]."""
-        stance_width: tuple[float, float] = MISSING
-        """Range for foot stance width command [m]."""
-        footswing_height: tuple[float, float] = MISSING
-        """Range for footswing height command [m]."""
+        body_roll: tuple[float, float] = MISSING
+        """Range for body roll command [rad]."""
 
     ranges: Ranges = MISSING
     """Distribution ranges for the gait parameters."""
@@ -53,8 +58,11 @@ class UniformGaitCommandCfgQuad(CommandTermCfg):
     resampling_time_range: tuple[float, float] = MISSING
     """Time interval for resampling the gait (in seconds)."""
 
-    canonical_gait_probability: float = 0.5
-    """Probability of sampling theta from a canonical gait center (vs. uniform)."""
+    multi_gait: bool = True
+    """Whether to sample phase offsets from canonical gaits."""
 
-    canonical_gait_std: float = 0.1
-    """Standard deviation of Gaussian when sampling theta around a canonical gait."""
+    binary_phases: bool = True
+    """When True, use exact canonical offsets (no jitter)."""
+
+    gait_phase_jitter: float = 0.1
+    """Jitter added to canonical gait offsets when binary_phases is False."""

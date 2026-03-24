@@ -11,6 +11,8 @@ the termination introduced by the function.
 
 from __future__ import annotations
 
+import math
+
 import torch
 from typing import TYPE_CHECKING
 
@@ -32,21 +34,14 @@ def bad_orientation(
     Terminate if cos(θ) < cos(limit_angle), i.e. gz > -cos(limit_angle).
     """
     asset: RigidObject = env.scene[asset_cfg.name]
-    # projected_gravity_b[:, 2] is the z-component: -1 when upright, 0 when sideways, +1 when flipped
     gz = asset.data.projected_gravity_b[:, 2]
-    import math
     return gz > -math.cos(limit_angle)
 
 
 def simulation_crashed(
     env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), threshold: float = 0.5
 ) -> torch.Tensor:
-    """Terminate when the simulation crashed.
-
-    The simulation is considered to be crashed if the root position of the actor is too far away from
-    the initial position.
-    """
-    # extract the used quantities (to enable type-hinting)
+    """Terminate when the simulation crashed (NaN or Inf in root velocity)."""
     asset: RigidObject = env.scene[asset_cfg.name]
     return torch.logical_or(
         torch.isnan(asset.data.root_link_lin_vel_w[:, 0]),

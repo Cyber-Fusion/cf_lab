@@ -1,0 +1,862 @@
+{
+  "status": "completed",
+  "early_stop_reason": null,
+  "task": "Isaac-WTW-Flat-Ayg-v0",
+  "play_task": "Isaac-WTW-Flat-Ayg-Play-v0",
+  "log_dir": "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13",
+  "iterations_completed": 5999,
+  "max_iterations": 6000,
+  "num_envs": 2048,
+  "num_play_envs": 4,
+  "overrides_applied": {},
+  "metrics": {
+    "log_dir": "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13",
+    "total_iterations": 5999,
+    "wall_time_seconds": null,
+    "scalars": {
+      "Curriculum/sigma_exp_neg_anneal": {
+        "final": 5.0,
+        "mean_last_100": 5.0,
+        "std_last_100": 0.0,
+        "max": 5.0,
+        "min": 1.0000003576278687,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 1.0008344101905822,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Curriculum/velocity_curriculum": {
+        "final": 1.5,
+        "mean_last_100": 1.5,
+        "std_last_100": 0.0,
+        "max": 1.5,
+        "min": 1.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 1.4091666674613952,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Episode_Termination/bad_orientation": {
+        "final": 0.04449462890625,
+        "mean_last_100": 0.03345357373356819,
+        "std_last_100": 0.003993964289769119,
+        "max": 0.9488322138786316,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "oscillating",
+        "converged_at_iteration": 59,
+        "converged_value": 0.7279345902800559,
+        "percent_of_training_at_convergence": 1.0
+      },
+      "Episode_Termination/base_contact": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0259195975959301,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "oscillating",
+        "converged_at_iteration": 89,
+        "converged_value": 0.01731974328868091,
+        "percent_of_training_at_convergence": 1.5
+      },
+      "Episode_Termination/simulation_crashed": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Episode_Termination/time_out": {
+        "final": 0.95599365234375,
+        "mean_last_100": 0.9666935420036316,
+        "std_last_100": 0.003841047390063753,
+        "max": 0.98077392578125,
+        "min": 0.0108642578125,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.1575716184824705,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Loss/entropy": {
+        "final": 4.7672343254089355,
+        "mean_last_100": 4.770667052268982,
+        "std_last_100": 0.01211652449095949,
+        "max": 16.992719650268555,
+        "min": 3.6362102031707764,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 15.017617950439455,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Loss/learning_rate": {
+        "final": 5.062499985797331e-05,
+        "mean_last_100": 2.8462499813031172e-05,
+        "std_last_100": 1.7590818247231143e-05,
+        "max": 0.0012974634300917387,
+        "min": 9.999999747378752e-06,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "oscillating",
+        "converged_at_iteration": 62,
+        "converged_value": 0.0002425935548671987,
+        "percent_of_training_at_convergence": 1.0
+      },
+      "Loss/surrogate": {
+        "final": -0.007140929810702801,
+        "mean_last_100": -0.005029441461811075,
+        "std_last_100": 0.002187415702850165,
+        "max": 0.020950952544808388,
+        "min": -0.01818755641579628,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "oscillating",
+        "converged_at_iteration": 50,
+        "converged_value": -0.01416203010827303,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Loss/value_function": {
+        "final": 4420.361328125,
+        "mean_last_100": 4079.818132324219,
+        "std_last_100": 665.3370411881326,
+        "max": 6599.91943359375,
+        "min": 0.027421703562140465,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "oscillating",
+        "converged_at_iteration": 49,
+        "converged_value": 0.060491362661123274,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Metrics/base_velocity/error_vel_xy": {
+        "final": 0.3117353022098541,
+        "mean_last_100": 0.3080570098757744,
+        "std_last_100": 0.012546846178779764,
+        "max": 0.6777980327606201,
+        "min": 0.015280188992619514,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.2849977242574096,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Metrics/base_velocity/error_vel_yaw": {
+        "final": 0.28419119119644165,
+        "mean_last_100": 0.29263294994831085,
+        "std_last_100": 0.008965571259990524,
+        "max": 0.44913098216056824,
+        "min": 0.01583128608763218,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.24519963961094615,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Perf/collection time": {
+        "final": 0.7406976222991943,
+        "mean_last_100": 0.7337860369682312,
+        "std_last_100": 0.011478183941344233,
+        "max": 1.6914348602294922,
+        "min": 0.6919033527374268,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 50,
+        "converged_value": 0.7567329692840576,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Perf/learning_time": {
+        "final": 0.1228177547454834,
+        "mean_last_100": 0.12421398162841797,
+        "std_last_100": 0.0008332073140808986,
+        "max": 0.17679405212402344,
+        "min": 0.11799502372741699,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.12406201362609864,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Perf/total_fps": {
+        "final": 56920.0,
+        "mean_last_100": 57296.43,
+        "std_last_100": 765.7930693731826,
+        "max": 60328.0,
+        "min": 26309.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 55278.780000000006,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Policy/mean_noise_std": {
+        "final": 0.3623458743095398,
+        "mean_last_100": 0.36247686952352526,
+        "std_last_100": 0.00034251281458268543,
+        "max": 0.9967176914215088,
+        "min": 0.3304390609264374,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.8467282962799073,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Train/mean_episode_length": {
+        "final": 980.3499755859375,
+        "mean_last_100": 981.2124987792969,
+        "std_last_100": 10.69985774237614,
+        "max": 1000.0,
+        "min": 11.97560977935791,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 50,
+        "converged_value": 210.1658000946045,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Train/mean_episode_length/time": {
+        "final": 980.3499755859375,
+        "mean_last_100": 981.2124987792969,
+        "std_last_100": 10.69985774237614,
+        "max": 1000.0,
+        "min": 11.97560977935791,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 45,
+        "converged_value": 210.1658000946045,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "Train/mean_reward": {
+        "final": 10632.34765625,
+        "mean_last_100": 10827.086484375,
+        "std_last_100": 313.08993778024666,
+        "max": 11636.9365234375,
+        "min": -5.111149787902832,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 126,
+        "converged_value": 28.479934921264647,
+        "percent_of_training_at_convergence": 2.1
+      },
+      "Train/mean_reward/time": {
+        "final": 10632.34765625,
+        "mean_last_100": 10827.086484375,
+        "std_last_100": 313.08993778024666,
+        "max": 11636.9365234375,
+        "min": -5.111149787902832,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 112,
+        "converged_value": 28.479934921264647,
+        "percent_of_training_at_convergence": 2.1
+      }
+    },
+    "reward_terms": {
+      "action_rate_l2": {
+        "final": -0.06602568924427032,
+        "mean_last_100": -0.06525401070713997,
+        "std_last_100": 0.0017770620158482904,
+        "max": -0.0028494081925600767,
+        "min": -0.14196844398975372,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.036950380257330835,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "action_smoothness_l2": {
+        "final": -0.12419500201940536,
+        "mean_last_100": -0.12322258993983269,
+        "std_last_100": 0.0025819219809727037,
+        "max": -0.007378019392490387,
+        "min": -0.288828045129776,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.10537215538322926,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "ang_vel_xy_l2": {
+        "final": -0.06311715394258499,
+        "mean_last_100": -0.05878711756318808,
+        "std_last_100": 0.0041712273842525625,
+        "max": -0.0009192262659780681,
+        "min": -0.08684947341680527,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.014045753533719106,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "base_height_l2": {
+        "final": -0.6696776151657104,
+        "mean_last_100": -0.6800706803798675,
+        "std_last_100": 0.05855049409088046,
+        "max": -0.008445735089480877,
+        "min": -2.1097750663757324,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 53,
+        "converged_value": -0.19288001090288162,
+        "percent_of_training_at_convergence": 0.9
+      },
+      "body_pitch_tracking": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "body_roll_l2": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "dof_pos_limits": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "feet_air_time": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "feet_slip": {
+        "final": -0.015880102291703224,
+        "mean_last_100": -0.015159808769822121,
+        "std_last_100": 0.0011913630576366296,
+        "max": -0.00037975641316734254,
+        "min": -0.0388680100440979,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.006791906949947589,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "flat_orientation_l2": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "foot_clearance": {
+        "final": -0.10944133996963501,
+        "mean_last_100": -0.11339848890900611,
+        "std_last_100": 0.009443557400670263,
+        "max": -0.0018607617821544409,
+        "min": -0.2644807696342468,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.04778202767018229,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "footswing_height": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "gait": {
+        "final": 47.410179138183594,
+        "mean_last_100": 48.1947144317627,
+        "std_last_100": 2.0588980343922483,
+        "max": 53.67133331298828,
+        "min": 0.43984362483024597,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 6.4791248244047175,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "joint_acc_l2": {
+        "final": -0.05643981695175171,
+        "mean_last_100": -0.05570997890084982,
+        "std_last_100": 0.0025324361762205745,
+        "max": -0.0012920016888529062,
+        "min": -0.07257047295570374,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.00738723564427346,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "joint_deviation_l1": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "joint_torques_l2": {
+        "final": -0.15364685654640198,
+        "mean_last_100": -0.15379649996757508,
+        "std_last_100": 0.004891657715329958,
+        "max": -0.0020772824063897133,
+        "min": -0.17873327434062958,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.041432485515251756,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "joint_vel_l2": {
+        "final": -0.07803049683570862,
+        "mean_last_100": -0.07562325522303581,
+        "std_last_100": 0.004337554987533498,
+        "max": -0.0007727775955572724,
+        "min": -0.0957195982336998,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.010023275327403098,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "lin_vel_z_l2": {
+        "final": -0.12982077896595,
+        "mean_last_100": -0.12432918950915336,
+        "std_last_100": 0.012383178732022073,
+        "max": -0.0010166715364903212,
+        "min": -0.17254754900932312,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.008313055331818758,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "orientation_control": {
+        "final": -1.0031559467315674,
+        "mean_last_100": -1.0062994927167892,
+        "std_last_100": 0.06411051452073559,
+        "max": -0.03536637872457504,
+        "min": -2.946589231491089,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": -0.8248523633182049,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "raibert_heuristic": {
+        "final": 0.0,
+        "mean_last_100": 0.0,
+        "std_last_100": 0.0,
+        "max": 0.0,
+        "min": 0.0,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 49,
+        "converged_value": 0.0,
+        "percent_of_training_at_convergence": 0.8
+      },
+      "stand_still_when_zero_command": {
+        "final": -0.07823537290096283,
+        "mean_last_100": -0.07000920753926039,
+        "std_last_100": 0.027491849409415046,
+        "max": -3.062123869312927e-05,
+        "min": -0.18498927354812622,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "oscillating",
+        "converged_at_iteration": 98,
+        "converged_value": -0.06913260288536549,
+        "percent_of_training_at_convergence": 1.6
+      },
+      "stand_when_zero_command": {
+        "final": -0.031159091740846634,
+        "mean_last_100": -0.03010165311396122,
+        "std_last_100": 0.011965303746195645,
+        "max": -4.583927420753753e-06,
+        "min": -0.08345694839954376,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "oscillating",
+        "converged_at_iteration": 98,
+        "converged_value": -0.005135987987741829,
+        "percent_of_training_at_convergence": 1.6
+      },
+      "track_ang_vel_z_exp": {
+        "final": 0.8796045184135437,
+        "mean_last_100": 0.8700994277000427,
+        "std_last_100": 0.01691472913553219,
+        "max": 0.8983603715896606,
+        "min": 0.004410976078361273,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 67,
+        "converged_value": 0.13475896149873734,
+        "percent_of_training_at_convergence": 1.1
+      },
+      "track_lin_vel_xy_exp": {
+        "final": 1.7457618713378906,
+        "mean_last_100": 1.74374143242836,
+        "std_last_100": 0.03797489865891744,
+        "max": 1.856512427330017,
+        "min": 0.007099217735230923,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "converged_early",
+        "converged_at_iteration": 120,
+        "converged_value": 0.758034530878067,
+        "percent_of_training_at_convergence": 2.0
+      },
+      "undesired_contacts": {
+        "final": -0.0008777777547948062,
+        "mean_last_100": -0.0017812103513278998,
+        "std_last_100": 0.0014258430239656203,
+        "max": 0.0,
+        "min": -0.21365463733673096,
+        "trend": "stable",
+        "num_points": 6000,
+        "curve_shape": "oscillating",
+        "converged_at_iteration": 51,
+        "converged_value": -0.06663490876555442,
+        "percent_of_training_at_convergence": 0.9
+      }
+    },
+    "suspicious_patterns": [
+      {
+        "pattern": "high_reward_low_tracking",
+        "severity": "critical",
+        "details": "Total reward is 10632.35 but tracking terms sum to 2.625 (0.0% of total). Robot may be exploiting non-tracking rewards."
+      },
+      {
+        "pattern": "tracking_flatlined_early",
+        "severity": "warning",
+        "details": "'track_ang_vel_z_exp' converged early (iter 67) at value 0.880 \u2014 may not be learning to track velocity."
+      },
+      {
+        "pattern": "tracking_flatlined_early",
+        "severity": "warning",
+        "details": "'track_lin_vel_xy_exp' converged early (iter 120) at value 1.746 \u2014 may not be learning to track velocity."
+      }
+    ],
+    "all_tags": [
+      "Curriculum/sigma_exp_neg_anneal",
+      "Curriculum/velocity_curriculum",
+      "Episode_Reward/action_rate_l2",
+      "Episode_Reward/action_smoothness_l2",
+      "Episode_Reward/ang_vel_xy_l2",
+      "Episode_Reward/base_height_l2",
+      "Episode_Reward/body_pitch_tracking",
+      "Episode_Reward/body_roll_l2",
+      "Episode_Reward/dof_pos_limits",
+      "Episode_Reward/feet_air_time",
+      "Episode_Reward/feet_slip",
+      "Episode_Reward/flat_orientation_l2",
+      "Episode_Reward/foot_clearance",
+      "Episode_Reward/footswing_height",
+      "Episode_Reward/gait",
+      "Episode_Reward/joint_acc_l2",
+      "Episode_Reward/joint_deviation_l1",
+      "Episode_Reward/joint_torques_l2",
+      "Episode_Reward/joint_vel_l2",
+      "Episode_Reward/lin_vel_z_l2",
+      "Episode_Reward/orientation_control",
+      "Episode_Reward/raibert_heuristic",
+      "Episode_Reward/stand_still_when_zero_command",
+      "Episode_Reward/stand_when_zero_command",
+      "Episode_Reward/track_ang_vel_z_exp",
+      "Episode_Reward/track_lin_vel_xy_exp",
+      "Episode_Reward/undesired_contacts",
+      "Episode_Termination/bad_orientation",
+      "Episode_Termination/base_contact",
+      "Episode_Termination/simulation_crashed",
+      "Episode_Termination/time_out",
+      "Loss/entropy",
+      "Loss/learning_rate",
+      "Loss/surrogate",
+      "Loss/value_function",
+      "Metrics/base_velocity/error_vel_xy",
+      "Metrics/base_velocity/error_vel_yaw",
+      "Perf/collection time",
+      "Perf/learning_time",
+      "Perf/total_fps",
+      "Policy/mean_noise_std",
+      "Train/mean_episode_length",
+      "Train/mean_episode_length/time",
+      "Train/mean_reward",
+      "Train/mean_reward/time"
+    ]
+  },
+  "convergence_summary": {
+    "action_rate_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.06602568924427032
+    },
+    "action_smoothness_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.12419500201940536
+    },
+    "ang_vel_xy_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.06311715394258499
+    },
+    "base_height_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 53,
+      "percent_of_training_at_convergence": 0.9,
+      "final": -0.6696776151657104
+    },
+    "body_pitch_tracking": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 0.0
+    },
+    "body_roll_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 0.0
+    },
+    "dof_pos_limits": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 0.0
+    },
+    "feet_air_time": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 0.0
+    },
+    "feet_slip": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.015880102291703224
+    },
+    "flat_orientation_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 0.0
+    },
+    "foot_clearance": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.10944133996963501
+    },
+    "footswing_height": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 0.0
+    },
+    "gait": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 47.410179138183594
+    },
+    "joint_acc_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.05643981695175171
+    },
+    "joint_deviation_l1": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 0.0
+    },
+    "joint_torques_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.15364685654640198
+    },
+    "joint_vel_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.07803049683570862
+    },
+    "lin_vel_z_l2": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -0.12982077896595
+    },
+    "orientation_control": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": -1.0031559467315674
+    },
+    "raibert_heuristic": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 49,
+      "percent_of_training_at_convergence": 0.8,
+      "final": 0.0
+    },
+    "stand_still_when_zero_command": {
+      "curve_shape": "oscillating",
+      "converged_at_iteration": 98,
+      "percent_of_training_at_convergence": 1.6,
+      "final": -0.07823537290096283
+    },
+    "stand_when_zero_command": {
+      "curve_shape": "oscillating",
+      "converged_at_iteration": 98,
+      "percent_of_training_at_convergence": 1.6,
+      "final": -0.031159091740846634
+    },
+    "track_ang_vel_z_exp": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 67,
+      "percent_of_training_at_convergence": 1.1,
+      "final": 0.8796045184135437
+    },
+    "track_lin_vel_xy_exp": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 120,
+      "percent_of_training_at_convergence": 2.0,
+      "final": 1.7457618713378906
+    },
+    "undesired_contacts": {
+      "curve_shape": "oscillating",
+      "converged_at_iteration": 51,
+      "percent_of_training_at_convergence": 0.9,
+      "final": -0.0008777777547948062
+    },
+    "_mean_reward": {
+      "curve_shape": "converged_early",
+      "converged_at_iteration": 126,
+      "percent_of_training_at_convergence": 2.1,
+      "final": 10632.34765625
+    }
+  },
+  "suspicious_patterns": [
+    {
+      "pattern": "high_reward_low_tracking",
+      "severity": "critical",
+      "details": "Total reward is 10632.35 but tracking terms sum to 2.625 (0.0% of total). Robot may be exploiting non-tracking rewards."
+    },
+    {
+      "pattern": "tracking_flatlined_early",
+      "severity": "warning",
+      "details": "'track_ang_vel_z_exp' converged early (iter 67) at value 0.880 \u2014 may not be learning to track velocity."
+    },
+    {
+      "pattern": "tracking_flatlined_early",
+      "severity": "warning",
+      "details": "'track_lin_vel_xy_exp' converged early (iter 120) at value 1.746 \u2014 may not be learning to track velocity."
+    }
+  ],
+  "video_frames_dir": "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames",
+  "frame_paths": [
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_001.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_002.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_003.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_004.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_005.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_006.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_007.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_008.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_009.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_010.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_011.png",
+    "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/frames/frame_012.png"
+  ],
+  "training_time_seconds": 5238.8,
+  "checkpoint": "/home/miq-hovsepyan/Desktop/CyberFusion/cf_lab_root/cf_lab/logs/rsl_rl/ayg_wtw_flat/2026-03-23_23-24-13/model_5999.pt"
+}

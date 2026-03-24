@@ -11,16 +11,16 @@ def get_gait_phase(env: ManagerBasedRLEnv) -> torch.Tensor:
     """Get per-foot timing references as observation.
 
     Computes t_t = [sin(2*pi*t^LF), sin(2*pi*t^RF), sin(2*pi*t^LH), sin(2*pi*t^RH)]
-    where per-foot timings are derived from the theta offset parameterization.
+    where per-foot timings are derived from the direct offset parameterization.
 
     Returns:
         torch.Tensor: The per-foot phase observation. Shape: (num_envs, 4).
     """
     from cf_lab.tasks.manager_based.walk_these_ways.mdp.rewards import (
         IDX_FREQUENCY,
-        IDX_THETA1,
-        IDX_THETA2,
-        IDX_THETA3,
+        IDX_OFFSET2,
+        IDX_OFFSET3,
+        IDX_OFFSET4,
         compute_per_foot_timings,
     )
 
@@ -30,13 +30,13 @@ def get_gait_phase(env: ManagerBasedRLEnv) -> torch.Tensor:
     command_term = env.command_manager.get_term("gait_command")
     gait_params = command_term.command
 
-    theta1 = gait_params[:, IDX_THETA1]
-    theta2 = gait_params[:, IDX_THETA2]
-    theta3 = gait_params[:, IDX_THETA3]
+    off2 = gait_params[:, IDX_OFFSET2]
+    off3 = gait_params[:, IDX_OFFSET3]
+    off4 = gait_params[:, IDX_OFFSET4]
     frequency = gait_params[:, IDX_FREQUENCY]
 
     t = torch.remainder(env.episode_length_buf * env.step_dt * frequency, 1.0)
-    t_LF, t_RF, t_LH, t_RH = compute_per_foot_timings(theta1, theta2, theta3, t)
+    t_LF, t_RF, t_LH, t_RH = compute_per_foot_timings(off2, off3, off4, t)
 
     phases = torch.stack([
         torch.sin(2 * torch.pi * t_LF),
@@ -52,8 +52,7 @@ def get_gait_command(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     """Get the current gait command parameters as observation.
 
     Returns:
-        torch.Tensor: The gait command parameters [theta1, theta2, theta3, frequency,
-                      base_height, body_pitch, stance_width, footswing_height].
-                     Shape: (num_envs, 8).
+        torch.Tensor: The 9D gait command [freq, dur, off2, off3, off4,
+                      feet_h, base_h, pitch, roll]. Shape: (num_envs, 9).
     """
     return env.command_manager.get_command(command_name)

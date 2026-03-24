@@ -9,23 +9,6 @@ from isaaclab.utils import configclass
 
 
 @configclass
-class RslRlPpoActorCriticEstimatorCfg(RslRlPpoActorCriticCfg):
-    """PPO actor-critic config extended with state estimator fields."""
-
-    class_name: str = "ActorCriticEstimator"
-    estimator_hidden_dims: list[int] = [256, 128]
-    estimator_output_dim: int = 3  # [vx, vy, vz]
-    estimator_loss_coef: float = 1.0
-
-
-@configclass
-class RslRlPpoEstimatorAlgorithmCfg(RslRlPpoAlgorithmCfg):
-    """PPO algorithm config that uses PPOEstimator (with supervised estimator loss)."""
-
-    class_name: str = "PPOEstimator"
-
-
-@configclass
 class AygRoughWTWPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 21
     max_iterations = 30000
@@ -42,14 +25,14 @@ class AygRoughWTWPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.005,
+        entropy_coef=0.001,  # was 0.005; reduced to control noise growth over long runs
         num_learning_epochs=5,
         num_mini_batches=4,
         learning_rate=1.0e-3,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
-        desired_kl=0.008,
+        desired_kl=0.01,  # was 0.008; relaxed to prevent LR collapse
         max_grad_norm=1.0,
     )
 
@@ -59,7 +42,29 @@ class AygFlatWTWPPORunnerCfg(AygRoughWTWPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 5000
+        self.max_iterations = 6000
+        self.num_steps_per_env = 24
+        self.save_interval = 200
         self.experiment_name = "ayg_wtw_flat"
-        self.policy.actor_hidden_dims = [512, 256, 128]
-        self.policy.critic_hidden_dims = [512, 256, 128]
+        self.empirical_normalization = False
+
+        self.policy = RslRlPpoActorCriticCfg(
+            init_noise_std=1.0,
+            actor_hidden_dims=[512, 256, 128],
+            critic_hidden_dims=[512, 256, 128],
+            activation="elu",
+        )
+        self.algorithm = RslRlPpoAlgorithmCfg(
+            value_loss_coef=1.0,
+            use_clipped_value_loss=True,
+            clip_param=0.2,
+            entropy_coef=0.005,
+            num_learning_epochs=5,
+            num_mini_batches=4,
+            learning_rate=1.0e-3,
+            schedule="adaptive",
+            gamma=0.99,
+            lam=0.95,
+            desired_kl=0.01,
+            max_grad_norm=1.0,
+        )

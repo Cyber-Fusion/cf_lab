@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import torch
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation, RigidObject
@@ -46,11 +46,6 @@ def randomize_rigid_body_coms(
         )
 
     asset.root_physx_view.set_coms(coms, env_ids)
-
-
-"""
-Internal helper functions.
-"""
 
 
 def _randomize_prop_by_op(

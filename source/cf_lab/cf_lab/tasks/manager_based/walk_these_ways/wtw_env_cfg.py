@@ -96,17 +96,19 @@ class CommandsCfg:
     gait_command = mdp.UniformGaitCommandCfgQuad(
         resampling_time_range=(5.0, 5.0),
         debug_vis=False,
-        canonical_gait_probability=0.5,
-        canonical_gait_std=0.1,
+        multi_gait=True,
+        binary_phases=True,
+        gait_phase_jitter=0.1,
         ranges=mdp.UniformGaitCommandCfgQuad.Ranges(
-            theta1=(0.0, 1.0),           # Phase offset param 1 [0-1]
-            theta2=(0.0, 1.0),           # Phase offset param 2 [0-1]
-            theta3=(0.0, 1.0),           # Phase offset param 3 [0-1]
-            frequency=(2.0, 4.0),        # Gait frequency [Hz]
-            base_height=(0.30, 0.40),    # Body height [m]
-            body_pitch=(-0.3, 0.3),      # Body pitch [rad]
-            stance_width=(0.15, 0.35),   # Foot stance width [m]
-            footswing_height=(0.05, 0.20),  # Footswing height [m]
+            frequencies=(2.0, 4.0),
+            durations=(0.5, 0.5),
+            offsets2=(0.5, 0.5),
+            offsets3=(0.0, 0.0),
+            offsets4=(0.0, 0.0),
+            feet_height=(0.05, 0.20),
+            base_height=(0.20, 0.40),
+            body_pitch=(-0.4, 0.4),
+            body_roll=(-0.2, 0.2),
         ),
     )
 
@@ -114,8 +116,9 @@ class CommandsCfg:
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
         rel_standing_envs=0.1,
-        rel_heading_envs=0.0,
-        heading_command=False,
+        rel_heading_envs=1.0,
+        heading_command=True,
+        heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
@@ -161,6 +164,8 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
+            self.history_length = 5
+            self.flatten_history_dim = True
 
     @configclass
     class CriticCfg(ObsGroup):
@@ -188,6 +193,8 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
+            self.history_length = 5
+            self.flatten_history_dim = True
 
     @configclass
     class EstimatorGtCfg(ObsGroup):
@@ -343,22 +350,19 @@ class RewardsCfg:
         }
     )
 
-    # feet_clearance = RewTerm(
-    #     func=mdp.foot_clearance,
-    #     weight=-0.0,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
-    #         "sensor_cfg": Params.height_scanner,
-    #     },
-    # )
-
     foot_clearance = RewTerm(
-        func=mdp.foot_clearance_reward,
+        func=mdp.FootClearanceCmdLinearQuad,
         weight=0.0,
         params={
-            "std": 0.05,
-            "tanh_mult": 2.0,
+            "foot_radius": 0.02,
+            "tracking_contacts_shaped_force": -1.0,
+            "tracking_contacts_shaped_vel": -1.0,
+            "gait_force_sigma": 50.0,
+            "gait_vel_sigma": 1.0,
+            "kappa_gait_probs": 0.07,
+            "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
         },
     )
 
@@ -416,8 +420,8 @@ class RewardsCfg:
             "tracking_contacts_shaped_force": -1.0,
             "tracking_contacts_shaped_vel": -1.0,
             "gait_force_sigma": 50.0,
-            "gait_vel_sigma": 1.25,
-            "kappa_gait_probs": 0.05,
+            "gait_vel_sigma": 1.0,
+            "kappa_gait_probs": 0.07,
             "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
@@ -432,8 +436,8 @@ class RewardsCfg:
             "tracking_contacts_shaped_force": -1.0,
             "tracking_contacts_shaped_vel": -1.0,
             "gait_force_sigma": 50.0,
-            "gait_vel_sigma": 1.25,
-            "kappa_gait_probs": 0.05,
+            "gait_vel_sigma": 1.0,
+            "kappa_gait_probs": 0.07,
             "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
@@ -441,9 +445,23 @@ class RewardsCfg:
         },
     )
 
-    # -- body pitch tracking
+    # -- orientation control (commanded pitch + roll tracking)
+    orientation_control = RewTerm(
+        func=mdp.orientation_control,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name)},
+    )
+
+    # -- body pitch tracking (legacy, kept for rough)
     body_pitch_tracking = RewTerm(
         func=mdp.body_pitch_tracking,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name)},
+    )
+
+    # -- body roll penalty (keep upright, no commanded roll)
+    body_roll_l2 = RewTerm(
+        func=mdp.body_roll_l2,
         weight=0.0,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name)},
     )
@@ -452,7 +470,11 @@ class RewardsCfg:
     raibert_heuristic = RewTerm(
         func=mdp.RaibertHeuristicFootswing,
         weight=0.0,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names)},
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
+            "desired_stance_width": 0.3,
+            "desired_stance_length": 0.55,
+        },
     )
 
 
@@ -463,7 +485,7 @@ class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.base_name), "threshold": 1.0},
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.termination_contact_names), "threshold": 1.0},
     )
     shank_thigh_contact = DoneTerm(
         func=mdp.illegal_contact,
@@ -485,13 +507,13 @@ class CurriculumCfg:
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
-    # Anneal sigma_exp_neg: penalties start weak (focus on tracking) → grow strong (refine gait)
+    # Anneal sigma: exp-negative gate starts weak → grows strict
     sigma_exp_neg_anneal = CurrTerm(
         func=mdp.anneal_sigma_exp_neg,
         params={
-            "start_val": 0.02,
-            "end_val": 0.3,
-            "anneal_steps": 80000,
+            "sigma_min": 1.0,
+            "sigma_max": 20.0,
+            "anneal_steps": 24000,
         },
     )
 
@@ -536,7 +558,7 @@ class LocomotionWalkTheseWaysRoughEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 4
-        self.episode_length_s = 10.0
+        self.episode_length_s = 20.0
         # simulation settings
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
