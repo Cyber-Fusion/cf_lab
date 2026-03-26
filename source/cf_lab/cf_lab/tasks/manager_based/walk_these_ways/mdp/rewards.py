@@ -369,6 +369,32 @@ def base_height_l2(
     return torch.square(asset.data.root_pos_w[:, 2] - adjusted_target_height)
 
 
+def track_base_height_exp(
+    env: ManagerBasedRLEnv,
+    std: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    """Reward tracking of commanded base height using exp kernel.
+
+    Returns exp(-error^2 / std^2), giving 1.0 at perfect tracking and
+    decaying smoothly toward 0.0 as the height error grows.
+    """
+    asset: RigidObject = env.scene[asset_cfg.name]
+
+    commands = env.command_manager.get_command("gait_command")
+    cmd_base_height = commands[:, IDX_BASE_HEIGHT]
+
+    if sensor_cfg is not None:
+        sensor: RayCaster = env.scene[sensor_cfg.name]
+        target = cmd_base_height + torch.mean(sensor.data.ray_hits_w[..., 2], dim=1)
+    else:
+        target = cmd_base_height
+
+    error = asset.data.root_pos_w[:, 2] - target
+    return torch.exp(-torch.square(error) / (std**2))
+
+
 def air_time_reward(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg,

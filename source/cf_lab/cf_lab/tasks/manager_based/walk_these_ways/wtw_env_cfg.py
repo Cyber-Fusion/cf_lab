@@ -341,6 +341,16 @@ class RewardsCfg:
     joint_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-0.0)
     joint_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-0.0)
 
+    track_base_height_exp = RewTerm(
+        func=mdp.track_base_height_exp,
+        weight=0.0,
+        params={
+            "std": 0.05,
+            "asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name),
+            "sensor_cfg": Params.height_scanner,
+        },
+    )
+
     base_height_l2 = RewTerm(
         func=mdp.base_height_l2,
         weight=-0.0,

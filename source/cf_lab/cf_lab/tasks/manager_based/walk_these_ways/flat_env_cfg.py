@@ -37,6 +37,9 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # Events (flat-specific overrides)
         # ====================================================================
         self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
+        # Friction DR — covers Isaac Lab nominal (0.8/0.6) and Gazebo ground (1.0/1.0)
+        self.events.physics_material.params["static_friction_range"] = (0.5, 1.2)
+        self.events.physics_material.params["dynamic_friction_range"] = (0.4, 1.0)
         # disable push_robot for flat
         self.events.push_robot = None
 
@@ -64,6 +67,8 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # ====================================================================
         self.rewards.track_lin_vel_xy_exp.weight = 2.0
         self.rewards.track_ang_vel_z_exp.weight = 1.0
+        self.rewards.track_base_height_exp.weight = 1.0
+        self.rewards.track_base_height_exp.params["sensor_cfg"] = None  # flat terrain
 
         self.rewards.lin_vel_z_l2.weight = -2.0
         self.rewards.ang_vel_xy_l2.weight = -0.05
@@ -85,7 +90,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
 
         self.rewards.orientation_control.weight = -40.0
 
-        self.rewards.base_height_l2.weight = -160.0
+        self.rewards.base_height_l2.weight = -30.0  # reduced from -160; additive term now provides primary gradient
         self.rewards.base_height_l2.params["sensor_cfg"] = None  # flat terrain
 
         self.rewards.feet_slip.weight = -0.04
