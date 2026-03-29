@@ -43,10 +43,22 @@ class AygRewardsCfg(RewardsCfg):
         params={"asset_cfg": SceneEntityCfg("robot", body_names=".*_Foot")},
     )
 
+    foot_clearance = RewTerm(
+        func=ayg_mdp.foot_clearance_swing,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_Foot"),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Foot"),
+            "target_height": 0.10,
+            "sigma": 0.005,
+        },
+    )
+
 
 @configclass
 class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
     rewards: AygRewardsCfg = AygRewardsCfg()
+
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
@@ -67,7 +79,8 @@ class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.actions.joint_pos.scale = 0.25
 
         # event
-        self.events.push_robot = None
+        self.events.physics_material.params["static_friction_range"] = (0.4, 2.0)
+        self.events.physics_material.params["dynamic_friction_range"] = (0.4, 2.0)
         self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
         self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
         self.events.reset_base.params = {
@@ -85,15 +98,25 @@ class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # rewards
         self.rewards.track_lin_vel_xy_exp.weight = 2.0
         self.rewards.track_ang_vel_z_exp.weight = 1.0
-        self.rewards.dof_torques_l2.weight = -0.0002
+        self.rewards.lin_vel_z_l2.weight = -2.0
+        self.rewards.ang_vel_xy_l2.weight = -0.05
+        self.rewards.dof_torques_l2.weight = -1e-4
         self.rewards.dof_acc_l2.weight = -2.5e-7
+        self.rewards.action_rate_l2.weight = -0.01
         self.rewards.feet_air_time.weight = 0.01
-        self.rewards.undesired_contacts.weight = -0.25
-        self.rewards.base_height_l2.weight = -0.0
+        self.rewards.feet_air_time.params["threshold"] = 0.4
+        self.rewards.undesired_contacts.weight = -1.0
+        self.rewards.flat_orientation_l2.weight = -0.0
+        self.rewards.dof_pos_limits.weight = -0.0
+        self.rewards.base_height_l2.weight = -5.0
         self.rewards.base_height_l2.params["asset_cfg"].body_names = "Base"
         self.rewards.joint_deviation_l1.weight = -0.0
-        self.rewards.feet_regulation.weight = -0.05
+        self.rewards.feet_regulation.weight = -0.15
         self.rewards.feet_regulation.params["asset_cfg"].body_names = ".*_Foot"
+        self.rewards.feet_regulation.params["desired_body_height"] = 0.35
+        self.rewards.foot_clearance.weight = 0.25
+        self.rewards.foot_clearance.params["asset_cfg"].body_names = ".*_Foot"
+        self.rewards.foot_clearance.params["sensor_cfg"].body_names = ".*_Foot"
 
         # Commands
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)

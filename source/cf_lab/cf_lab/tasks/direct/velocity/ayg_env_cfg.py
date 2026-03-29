@@ -5,7 +5,7 @@ from isaaclab.envs import DirectRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
@@ -26,8 +26,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
+            "static_friction_range": (0.4, 2.0),
+            "dynamic_friction_range": (0.4, 2.0),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
@@ -52,6 +52,13 @@ class EventCfg:
         },
     )
 
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(10.0, 15.0),
+        params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
+    )
+
 
 @configclass
 class AygFlatEnvCfg(DirectRLEnvCfg):
@@ -60,7 +67,7 @@ class AygFlatEnvCfg(DirectRLEnvCfg):
     decimation = 4
     action_scale = 0.25
     action_space = 12
-    observation_space = 48
+    observation_space = 49
     state_space = 0
 
     # simulation
@@ -110,26 +117,24 @@ class AygFlatEnvCfg(DirectRLEnvCfg):
     enable_obs_noise = True
 
     # reward scales
-    lin_vel_reward_scale = 3.5
-    yaw_rate_reward_scale = 1.75
-    z_vel_reward_scale = -4.0
-    ang_vel_reward_scale = -0.06
-    joint_torque_reward_scale = -0.0001
+    lin_vel_reward_scale = 2.0
+    yaw_rate_reward_scale = 1.0
+    z_vel_reward_scale = -2.0
+    ang_vel_reward_scale = -0.05
+    joint_torque_reward_scale = -1e-4
     joint_accel_reward_scale = -2.5e-7
-    action_rate_reward_scale = -0.06
-    feet_air_time_reward_scale = 5.0
-    undesired_contact_reward_scale = -0.25
+    action_rate_reward_scale = -0.01
+    feet_air_time_reward_scale = 0.25
+    undesired_contact_reward_scale = -1.0
     flat_orientation_reward_scale = -5.0
     feet_regulation_reward_scale = -0.15
     base_height_reward_scale = -5.0
-
-    # foot clearance reward
-    foot_clearance_reward_scale = 0.35
-    foot_clearance_target = 0.04  # meters: target foot height during swing phase
+    foot_clearance_reward_scale = 0.25
 
     # reward parameters
-    feet_air_time_threshold = 0.08  # seconds: feet in air longer than this are rewarded
-    base_height_target = 0.30  # meters: target base height above ground
+    feet_air_time_threshold = 0.4  # seconds: feet in air longer than this are rewarded
+    base_height_target = 0.35  # meters: target base height above ground
+    foot_clearance_target = 0.10  # meters: target foot height during swing phase
 
 
 @configclass
@@ -142,6 +147,9 @@ class AygFlatEnvPlayCfg(AygFlatEnvCfg):
 
 @configclass
 class AygRoughEnvCfg(AygFlatEnvCfg):
+    # env
+    observation_space = 236
+
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="generator",
@@ -159,6 +167,16 @@ class AygRoughEnvCfg(AygFlatEnvCfg):
             project_uvw=True,
         ),
         debug_vis=False,
+    )
+
+    # height scanner for perceptive locomotion
+    height_scanner = RayCasterCfg(
+        prim_path="/World/envs/env_.*/Robot/Base",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+        attach_yaw_only=True,
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
     )
 
     # reward scales (override from flat config)

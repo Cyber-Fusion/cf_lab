@@ -1,5 +1,5 @@
 """
-Ayg locomotion environment.
+Ayg direct velocity-tracking locomotion environments.
 """
 
 import gymnasium as gym

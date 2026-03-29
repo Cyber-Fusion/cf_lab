@@ -9,7 +9,7 @@ import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
-from isaaclab.sensors import ContactSensor
+from isaaclab.sensors import ContactSensor, RayCaster
 
 from .ayg_env_cfg import AygFlatEnvCfg, AygRoughEnvCfg
 
@@ -20,6 +20,7 @@ NOISE_RANGES = {
     "projected_gravity": 0.05,
     "joint_pos": 0.01,
     "joint_vel": 1.5,
+    "height_scan": 0.1,
 }
 
 
@@ -73,6 +74,9 @@ class AygEnv(DirectRLEnv):
         self.scene.articulations["robot"] = self._robot
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
         self.scene.sensors["contact_sensor"] = self._contact_sensor
+        if isinstance(self.cfg, AygRoughEnvCfg):
+            self._height_scanner = RayCaster(self.cfg.height_scanner)
+            self.scene.sensors["height_scanner"] = self._height_scanner
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
@@ -136,15 +140,34 @@ class AygEnv(DirectRLEnv):
                 -NOISE_RANGES["joint_vel"], NOISE_RANGES["joint_vel"]
             )
 
+        height_data = None
+        if isinstance(self.cfg, AygRoughEnvCfg):
+            nominal_standing_height = 0.35
+            height_data = (
+                self._height_scanner.data.pos_w[:, 2].unsqueeze(1)
+                - self._height_scanner.data.ray_hits_w[..., 2]
+                - nominal_standing_height
+            ).clip(-1.0, 1.0)
+            if self.cfg.enable_obs_noise:
+                height_data = height_data + torch.empty_like(height_data).uniform_(
+                    -NOISE_RANGES["height_scan"], NOISE_RANGES["height_scan"]
+                )
+
         obs = torch.cat(
             [
-                base_lin_vel,
-                base_ang_vel,
-                projected_gravity,
-                self._commands,
-                joint_pos,
-                joint_vel,
-                self._actions,
+                tensor
+                for tensor in (
+                    base_lin_vel,
+                    base_ang_vel,
+                    projected_gravity,
+                    self._commands,
+                    self._heading_target.unsqueeze(1),
+                    joint_pos,
+                    joint_vel,
+                    self._actions,
+                    height_data,
+                )
+                if tensor is not None
             ],
             dim=-1,
         )
@@ -172,7 +195,7 @@ class AygEnv(DirectRLEnv):
         first_contact = self._contact_sensor.compute_first_contact(self.step_dt)[:, self._feet_ids]
         last_air_time = self._contact_sensor.data.last_air_time[:, self._feet_ids]
         air_time = torch.sum(
-            torch.clamp(last_air_time - self.cfg.feet_air_time_threshold, min=0.0) * first_contact, dim=1
+            (last_air_time - self.cfg.feet_air_time_threshold) * first_contact, dim=1
         ) * (torch.norm(self._commands[:, :2], dim=1) > 0.1)
         # undesired contacts
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
@@ -186,7 +209,7 @@ class AygEnv(DirectRLEnv):
         feet_pos_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2]
         feet_vel_xy = self._robot.data.body_lin_vel_w[:, self._feet_body_ids, 0:2]
         vel_norms_xy = torch.norm(feet_vel_xy, dim=-1)
-        exp_term = torch.exp(-feet_pos_z / (0.025 * 0.65))
+        exp_term = torch.exp(-feet_pos_z / (0.025 * self.cfg.base_height_target))
         exp_term = torch.clamp(exp_term, min=0.001, max=10.0)
         feet_reg = torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
 

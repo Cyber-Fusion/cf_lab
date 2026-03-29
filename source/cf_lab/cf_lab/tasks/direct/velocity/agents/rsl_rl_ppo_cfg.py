@@ -5,15 +5,15 @@ from isaaclab.utils import configclass
 
 @configclass
 class AygFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 32
-    max_iterations = 2000
+    num_steps_per_env = 24
+    max_iterations = 500
     save_interval = 50
     experiment_name = "ayg_flat_direct"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
-        actor_hidden_dims=[256, 256, 128],
-        critic_hidden_dims=[256, 256, 128],
+        actor_hidden_dims=[128, 128, 128],
+        critic_hidden_dims=[128, 128, 128],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(
@@ -35,7 +35,7 @@ class AygFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 @configclass
 class AygRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 1500
+    max_iterations = 2000
     save_interval = 50
     experiment_name = "ayg_rough_direct"
     empirical_normalization = False
