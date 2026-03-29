@@ -275,3 +275,61 @@ def joint_velocity_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) ->
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     return torch.linalg.norm((asset.data.joint_vel), dim=1)
+
+
+def foot_clearance_swing(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    target_height: float = 0.10,
+    sigma: float = 0.005,
+    velocity_threshold: float = 0.1,
+) -> torch.Tensor:
+    """Reward feet for achieving target height during swing phase.
+
+    Only active when the robot is moving (command velocity > threshold) and feet are airborne.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    feet_pos_z = asset.data.body_pos_w[:, asset_cfg.body_ids, 2]
+    current_air_time = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids]
+    is_in_swing = current_air_time > 0.0
+
+    clearance_error = torch.square(feet_pos_z - target_height)
+    reward = torch.sum(torch.exp(-clearance_error / sigma) * is_in_swing.float(), dim=1)
+
+    cmd = torch.norm(env.command_manager.get_command("base_velocity")[:, :2], dim=1)
+    return reward * (cmd > velocity_threshold).float()
+
+
+def feet_regulation(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg = None,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    desired_body_height: float = 0.65,
+) -> torch.Tensor:
+    """Penalize feet velocity when feet are close to the ground.
+
+    Encourages the robot to keep its feet still when they are near the ground,
+    reducing unnecessary foot movement during stance phase.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    feet_positions_z = asset.data.body_pos_w[:, asset_cfg.body_ids, 2]
+
+    feet_velocity_xy = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, 0:2]
+    vel_norms_xy = torch.norm(feet_velocity_xy, dim=-1)
+
+    if sensor_cfg is not None:
+        sensor = env.scene[sensor_cfg.name]
+        adjusted_desired_body_height = desired_body_height + sensor.data.pos_w[:, 2]
+        adjusted_desired_body_height = adjusted_desired_body_height.unsqueeze(1)
+    else:
+        adjusted_desired_body_height = desired_body_height
+
+    exp_term = torch.exp(-feet_positions_z / (0.025 * adjusted_desired_body_height))
+    exp_term = torch.clamp(exp_term, min=0.001, max=10.0)
+    r_fr = torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
+
+    return r_fr

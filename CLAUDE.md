@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
 **cf_lab** is an Isaac Lab extension for RL-based locomotion control of the AYG quadruped robot (12-DOF, 4 legs × 3 joints: HAA, HFE, KFE). It runs on NVIDIA Isaac Sim/Omniverse.

@@ -12,6 +12,7 @@ class AygFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
+        noise_std_type="log",
         actor_hidden_dims=[128, 128, 128],
         critic_hidden_dims=[128, 128, 128],
         activation="elu",
@@ -35,12 +36,13 @@ class AygFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 @configclass
 class AygRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 1500
+    max_iterations = 2000
     save_interval = 50
     experiment_name = "ayg_rough_direct"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
+        noise_std_type="log",
         actor_hidden_dims=[512, 256, 128],
         critic_hidden_dims=[512, 256, 128],
         activation="elu",
