@@ -107,9 +107,7 @@ class AygEnv(DirectRLEnv):
         # Compute heading-based yaw command
         root_quat = self._robot.data.root_quat_w
         _, _, yaw = math_utils.euler_xyz_from_quat(root_quat)
-        heading_error = torch.atan2(
-            torch.sin(self._heading_target - yaw), torch.cos(self._heading_target - yaw)
-        )
+        heading_error = torch.atan2(torch.sin(self._heading_target - yaw), torch.cos(self._heading_target - yaw))
         self._commands[:, 2] = torch.clamp(
             self.cfg.heading_control_stiffness * heading_error,
             min=-1.0,
@@ -175,77 +173,103 @@ class AygEnv(DirectRLEnv):
         return observations
 
     def _get_rewards(self) -> torch.Tensor:
-        # linear velocity tracking
+        # Estimate ground height beneath the robot for terrain-relative rewards
+        if isinstance(self.cfg, AygRoughEnvCfg):
+            ray_z = self._height_scanner.data.ray_hits_w[..., 2]
+            valid = torch.isfinite(ray_z)
+            ray_z = torch.where(valid, ray_z, self._height_scanner.data.pos_w[:, 2].unsqueeze(1))
+            self._ground_height = torch.mean(ray_z, dim=1)
+        else:
+            self._ground_height = torch.zeros(self.num_envs, device=self.device)
+
+        # Terms with zero weight are skipped entirely (avoids 0.0 * NaN = NaN).
+        reward_terms = [
+            ("track_lin_vel_xy_exp", self.cfg.lin_vel_reward_scale, self._reward_lin_vel_tracking),
+            ("track_ang_vel_z_exp", self.cfg.yaw_rate_reward_scale, self._reward_yaw_rate_tracking),
+            ("lin_vel_z_l2", self.cfg.z_vel_reward_scale, self._reward_lin_vel_z),
+            ("ang_vel_xy_l2", self.cfg.ang_vel_reward_scale, self._reward_ang_vel_xy),
+            ("dof_torques_l2", self.cfg.joint_torque_reward_scale, self._reward_joint_torques),
+            ("dof_acc_l2", self.cfg.joint_accel_reward_scale, self._reward_joint_accel),
+            ("action_rate_l2", self.cfg.action_rate_reward_scale, self._reward_action_rate),
+            ("feet_air_time", self.cfg.feet_air_time_reward_scale, self._reward_feet_air_time),
+            ("undesired_contacts", self.cfg.undesired_contact_reward_scale, self._reward_undesired_contacts),
+            ("flat_orientation_l2", self.cfg.flat_orientation_reward_scale, self._reward_flat_orientation),
+            ("feet_regulation", self.cfg.feet_regulation_reward_scale, self._reward_feet_regulation),
+            ("foot_clearance", self.cfg.foot_clearance_reward_scale, self._reward_foot_clearance),
+            ("base_height", self.cfg.base_height_reward_scale, self._reward_base_height),
+        ]
+
+        total_reward = torch.zeros(self.num_envs, device=self.device)
+        for name, weight, func in reward_terms:
+            if weight == 0.0:
+                continue
+            value = func() * weight * self.step_dt
+            total_reward += value
+            self._episode_sums[name] += value
+        return total_reward
+
+    # -- reward terms ---------------------------------------------------------------
+
+    def _reward_lin_vel_tracking(self) -> torch.Tensor:
         lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self._robot.data.root_lin_vel_b[:, :2]), dim=1)
-        lin_vel_error_mapped = torch.exp(-lin_vel_error / 0.25)
-        # yaw rate tracking
+        return torch.exp(-lin_vel_error / 0.25)
+
+    def _reward_yaw_rate_tracking(self) -> torch.Tensor:
         yaw_rate_error = torch.square(self._commands[:, 2] - self._robot.data.root_ang_vel_b[:, 2])
-        yaw_rate_error_mapped = torch.exp(-yaw_rate_error / 0.25)
-        # z velocity tracking
-        z_vel_error = torch.square(self._robot.data.root_lin_vel_b[:, 2])
-        # angular velocity x/y
-        ang_vel_error = torch.sum(torch.square(self._robot.data.root_ang_vel_b[:, :2]), dim=1)
-        # joint torques
-        joint_torques = torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
-        # joint acceleration
-        joint_accel = torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
-        # action rate
-        action_rate = torch.sum(torch.square(self._actions - self._previous_actions), dim=1)
-        # feet air time
+        return torch.exp(-yaw_rate_error / 0.25)
+
+    def _reward_lin_vel_z(self) -> torch.Tensor:
+        return torch.square(self._robot.data.root_lin_vel_b[:, 2])
+
+    def _reward_ang_vel_xy(self) -> torch.Tensor:
+        return torch.sum(torch.square(self._robot.data.root_ang_vel_b[:, :2]), dim=1)
+
+    def _reward_joint_torques(self) -> torch.Tensor:
+        return torch.sum(torch.square(self._robot.data.applied_torque), dim=1)
+
+    def _reward_joint_accel(self) -> torch.Tensor:
+        return torch.sum(torch.square(self._robot.data.joint_acc), dim=1)
+
+    def _reward_action_rate(self) -> torch.Tensor:
+        return torch.sum(torch.square(self._actions - self._previous_actions), dim=1)
+
+    def _reward_feet_air_time(self) -> torch.Tensor:
         first_contact = self._contact_sensor.compute_first_contact(self.step_dt)[:, self._feet_ids]
         last_air_time = self._contact_sensor.data.last_air_time[:, self._feet_ids]
-        air_time = torch.sum(
-            (last_air_time - self.cfg.feet_air_time_threshold) * first_contact, dim=1
-        ) * (torch.norm(self._commands[:, :2], dim=1) > 0.1)
-        # undesired contacts
+        return torch.sum((last_air_time - self.cfg.feet_air_time_threshold) * first_contact, dim=1) * (
+            torch.norm(self._commands[:, :2], dim=1) > 0.1
+        )
+
+    def _reward_undesired_contacts(self) -> torch.Tensor:
         net_contact_forces = self._contact_sensor.data.net_forces_w_history
         is_contact = (
             torch.max(torch.norm(net_contact_forces[:, :, self._undesired_contact_body_ids], dim=-1), dim=1)[0] > 1.0
         )
-        contacts = torch.sum(is_contact, dim=1)
-        # flat orientation
-        flat_orientation = torch.sum(torch.square(self._robot.data.projected_gravity_b[:, :2]), dim=1)
-        # feet regulation
-        feet_pos_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2]
+        return torch.sum(is_contact, dim=1)
+
+    def _reward_flat_orientation(self) -> torch.Tensor:
+        return torch.sum(torch.square(self._robot.data.projected_gravity_b[:, :2]), dim=1)
+
+    def _reward_feet_regulation(self) -> torch.Tensor:
+        feet_pos_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2] - self._ground_height.unsqueeze(1)
         feet_vel_xy = self._robot.data.body_lin_vel_w[:, self._feet_body_ids, 0:2]
         vel_norms_xy = torch.norm(feet_vel_xy, dim=-1)
         exp_term = torch.exp(-feet_pos_z / (0.025 * self.cfg.base_height_target))
         exp_term = torch.clamp(exp_term, min=0.001, max=10.0)
-        feet_reg = torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
+        return torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
 
-        # foot clearance: reward feet for achieving target height during swing phase
+    def _reward_foot_clearance(self) -> torch.Tensor:
+        feet_pos_z = self._robot.data.body_pos_w[:, self._feet_body_ids, 2] - self._ground_height.unsqueeze(1)
         current_air_time = self._contact_sensor.data.current_air_time[:, self._feet_ids]
         is_in_swing = current_air_time > 0.0
-        # Reward: exp(-|feet_z - target|/sigma) for swing feet, only when moving
         clearance_error = torch.square(feet_pos_z - self.cfg.foot_clearance_target)
-        foot_clearance = torch.sum(torch.exp(-clearance_error / 0.005) * is_in_swing.float(), dim=1) * (
+        return torch.sum(torch.exp(-clearance_error / 0.005) * is_in_swing.float(), dim=1) * (
             torch.norm(self._commands[:, :2], dim=1) > 0.1
         )
 
-        # base height
-        base_height = self._robot.data.root_pos_w[:, 2]
-        base_height_error = torch.square(base_height - self.cfg.base_height_target)
-
-        rewards = {
-            "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
-            "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
-            "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
-            "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
-            "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
-            "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
-            "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
-            "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
-            "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
-            "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
-            "feet_regulation": feet_reg * self.cfg.feet_regulation_reward_scale * self.step_dt,
-            "foot_clearance": foot_clearance * self.cfg.foot_clearance_reward_scale * self.step_dt,
-            "base_height": base_height_error * self.cfg.base_height_reward_scale * self.step_dt,
-        }
-        reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-        # Logging
-        for key, value in rewards.items():
-            self._episode_sums[key] += value
-        return reward
+    def _reward_base_height(self) -> torch.Tensor:
+        base_height = self._robot.data.root_pos_w[:, 2] - self._ground_height
+        return torch.square(base_height - self.cfg.base_height_target)
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
@@ -291,6 +315,9 @@ class AygEnv(DirectRLEnv):
         extras["Episode_Termination/base_contact"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
         self.extras["log"].update(extras)
+        # Log terrain curriculum level (only meaningful for rough terrain)
+        if hasattr(self._terrain, "terrain_levels"):
+            self.extras["log"]["Curriculum/terrain_level"] = torch.mean(self._terrain.terrain_levels.float()).item()
 
     def _resample_commands(self, env_ids: torch.Tensor):
         """Resample velocity commands for given environment indices."""

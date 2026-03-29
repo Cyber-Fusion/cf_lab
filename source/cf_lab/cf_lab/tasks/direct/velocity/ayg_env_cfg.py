@@ -180,5 +180,8 @@ class AygRoughEnvCfg(AygFlatEnvCfg):
     )
 
     # reward scales (override from flat config)
-    feet_air_time_reward_scale = 0.01
+    feet_air_time_reward_scale = 0.5
     flat_orientation_reward_scale = 0.0
+    feet_regulation_reward_scale = -0.0
+    base_height_reward_scale = -0.0
+    foot_clearance_reward_scale = -0.0
