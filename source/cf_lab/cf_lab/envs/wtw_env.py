@@ -34,9 +34,6 @@ _EXP_NEGATIVE_TERMS = {
     "feet_slip",
     "undesired_contacts",
     "foot_clearance",
-    "footswing_height",
-    "stand_when_zero_command",
-    "stand_still_when_zero_command",
     "raibert_heuristic",
 }
 
