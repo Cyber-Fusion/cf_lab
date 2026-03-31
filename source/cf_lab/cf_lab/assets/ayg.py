@@ -24,10 +24,13 @@ AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DCMotorCfg(
     joint_names_expr=[".*HAA", ".*HFE", ".*KFE"],
     saturation_effort=60.0,
     effort_limit=30.0,
-    velocity_limit=20.0,
+    velocity_limit=18.849,
     stiffness=40.0,
     damping=1.0,
-    friction=0.0,
+    armature=0.02,
+    friction=0.2,
+    dynamic_friction=0.1,
+    viscous_friction=None,
 )
 """Configuration for AYG's motor with DC actuator model."""
 

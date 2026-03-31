@@ -64,7 +64,7 @@ def anneal_sigma_exp_neg(
 ) -> float:
     """Quadratically anneal the exp-negative sigma coefficient.
 
-    sigma = sigma_min + (sigma_max - sigma_min) * min((step/(env_steps*anneal_steps))^2, 1.0)
+    sigma = sigma_min + (sigma_max - sigma_min) * min((step/anneal_steps)^2, 1.0)
 
     Early training: sigma is low, exp gate ~ 1, policy focuses on velocity tracking.
     Late training: sigma is high, exp gate suppresses reward when behavior is poor.
@@ -72,9 +72,7 @@ def anneal_sigma_exp_neg(
     Returns:
         The current sigma value (for logging).
     """
-    env_steps = 24
-    
-    progress = min(env.common_step_counter / (env_steps*anneal_steps), 1.0)
+    progress = min(env.common_step_counter / (anneal_steps), 1.0)
     new_val = sigma_min + (sigma_max - sigma_min) * (progress**2)
     env.reward_manager.sigma = new_val
     return new_val

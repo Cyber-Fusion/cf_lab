@@ -28,7 +28,6 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.actions.joint_pos.scale = {".*HAA": 0.125, ".*HFE": 0.25, ".*KFE": 0.25}
 
         # event
-        self.events.push_robot = None
         self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
         self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
         self.events.reset_base.params = {
