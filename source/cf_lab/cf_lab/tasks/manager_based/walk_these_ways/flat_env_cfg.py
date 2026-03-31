@@ -40,8 +40,9 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # Friction DR — covers Isaac Lab nominal (0.8/0.6) and Gazebo ground (1.0/1.0)
         self.events.physics_material.params["static_friction_range"] = (0.5, 1.2)
         self.events.physics_material.params["dynamic_friction_range"] = (0.4, 1.0)
-        # Disable push_robot in Phase 1 — isolate reward fixes from perturbation training
-        self.events.push_robot = None
+        # Push robot for perturbation recovery training (Phase 2)
+        self.events.push_robot.params["velocity_range"] = {"x": (-0.3, 0.3), "y": (-0.3, 0.3)}
+        self.events.push_robot.interval_range_s = (15.0, 25.0)
 
         # ====================================================================
         # Commands (flat-specific)
@@ -128,8 +129,8 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.rewards.footswing_height.params["height_scanner_cfg"] = None
         self.rewards.body_pitch_tracking.weight = 0.0
         self.rewards.body_roll_l2.weight = 0.0
-        self.rewards.stand_when_zero_command.weight = -0.5  # ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
-        self.rewards.stand_still_when_zero_command.weight = -0.2  # ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
+        self.rewards.stand_when_zero_command.weight = -1.0  # ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
+        self.rewards.stand_still_when_zero_command.weight = -0.3  # ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
         self.rewards.joint_deviation_l1.weight = 0.0
 
 

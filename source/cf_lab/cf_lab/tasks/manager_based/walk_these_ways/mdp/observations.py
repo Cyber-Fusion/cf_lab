@@ -45,12 +45,13 @@ def get_gait_phase(env: ManagerBasedRLEnv) -> torch.Tensor:
         torch.sin(2 * torch.pi * t_RH),
     ], dim=-1)  # (N, 4)
 
-    # Zero out gait phase when velocity command is zero (standing).
-    # Without this, the oscillating phase signal tells the policy "follow this gait"
-    # while rewards penalize movement — causing the robot to tap in place.
+    # Zero out gait phase when standing still (command zero AND robot not moving).
+    # When pushed (robot moving), keep phases active so policy can take recovery steps.
     cmd = env.command_manager.get_command("base_velocity")
-    cmd_not_null = (cmd.norm(dim=1, p=1) > 0.05).unsqueeze(1)  # (N, 1)
-    phases = phases * cmd_not_null
+    robot = env.scene["robot"]
+    robot_vel = robot.data.root_lin_vel_b[:, :2]
+    active = ((cmd.norm(dim=1, p=1) > 0.05) | (robot_vel.norm(dim=1) > 0.15)).unsqueeze(1)  # (N, 1)
+    phases = phases * active
 
     return phases
 

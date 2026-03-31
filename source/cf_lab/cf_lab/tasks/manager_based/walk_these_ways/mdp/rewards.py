@@ -41,6 +41,10 @@ IDX_BASE_HEIGHT = 6
 IDX_BODY_PITCH = 7
 IDX_BODY_ROLL = 8
 
+# Velocity threshold for push recovery: gait rewards re-activate when
+# the robot is moving faster than this even if command is zero.
+_ROBOT_VEL_THRESHOLD = 0.15
+
 
 def compute_per_foot_timings(
     off2: torch.Tensor, off3: torch.Tensor, off4: torch.Tensor, t: torch.Tensor
@@ -143,9 +147,12 @@ class GaitRewardQuad(ManagerTermBase):
         # Combined as a single reward; weight applied by reward manager.
         total_reward = force_reward + velocity_reward
 
-        cmd_not_null = env.command_manager.get_command("base_velocity").norm(p=1, dim=1) > 0.05
+        # Activate gait reward when commanded OR when robot is moving (push recovery)
+        cmd = env.command_manager.get_command("base_velocity")
+        robot_vel = self.asset.data.root_lin_vel_b[:, :2]
+        active = (cmd.norm(p=1, dim=1) > 0.05) | (robot_vel.norm(dim=1) > _ROBOT_VEL_THRESHOLD)
 
-        total_reward = total_reward * cmd_not_null
+        total_reward = total_reward * active
         return total_reward
 
     def compute_contact_targets(self, gait_params):
@@ -216,13 +223,16 @@ class FootSwingHeightQuad(GaitRewardQuad):
         ground_height = self._get_ground_height().unsqueeze(1)  # (N, 1)
         feet_heights = self.asset.data.body_pos_w[:, self.asset_cfg.body_ids, 2] - ground_height  # (N, 4)
 
-        cmd_not_null = self.env.command_manager.get_command("base_velocity").norm(p=1, dim=1) > 0.05
+        # Activate when commanded OR when robot is moving (push recovery)
+        cmd = self.env.command_manager.get_command("base_velocity")
+        robot_vel = self.asset.data.root_lin_vel_b[:, :2]
+        active = (cmd.norm(p=1, dim=1) > 0.05) | (robot_vel.norm(dim=1) > _ROBOT_VEL_THRESHOLD)
 
         # Penalize during SWING phase (1 - C), not stance
         return torch.sum(
             torch.square(feet_heights - cmd_height) * (1 - desired_contacts[:, :]),
             dim=1
-        ) * cmd_not_null
+        ) * active
 
     def __call__(
         self,
@@ -308,9 +318,12 @@ class FootClearanceCmdLinearQuad(GaitRewardQuad):
         # Height error during swing only
         height_error = torch.square(feet_heights - target_height) * swing_mask
 
-        cmd_not_null = env.command_manager.get_command("base_velocity").norm(p=1, dim=1) > 0.05
+        # Activate when commanded OR when robot is moving (push recovery)
+        cmd = env.command_manager.get_command("base_velocity")
+        robot_vel = self.asset.data.root_lin_vel_b[:, :2]
+        active = (cmd.norm(p=1, dim=1) > 0.05) | (robot_vel.norm(dim=1) > _ROBOT_VEL_THRESHOLD)
 
-        return torch.sum(height_error, dim=1) * cmd_not_null
+        return torch.sum(height_error, dim=1) * active
 
 
 class ActionSmoothnessPenalty(ManagerTermBase):
@@ -426,20 +439,26 @@ def air_time_reward(
 def stand_when_zero_command(
     env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
-    """Penalize joint positions that deviate from the default one when no command."""
+    """Penalize joint positions that deviate from default when no command AND robot is slow."""
     asset: Articulation = env.scene[asset_cfg.name]
     diff_angle = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
-    cmd_null = env.command_manager.get_command("base_velocity").norm(dim=1, p=1) < 0.05
+    cmd = env.command_manager.get_command("base_velocity")
+    robot_vel = asset.data.root_lin_vel_b[:, :2]
+    # Only penalize when command is zero AND robot isn't moving fast (not being pushed)
+    cmd_null = (cmd.norm(dim=1, p=1) < 0.05) & (robot_vel.norm(dim=1) < _ROBOT_VEL_THRESHOLD)
     return torch.norm(diff_angle, p=1, dim=1) * cmd_null
 
 
 def stand_still_when_zero_command(
     env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
-    """Penalize joint velocities when no command."""
+    """Penalize joint velocities when no command AND robot is slow."""
     asset: Articulation = env.scene[asset_cfg.name]
     joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
-    cmd_null = env.command_manager.get_command("base_velocity").norm(dim=1, p=1) < 0.05
+    cmd = env.command_manager.get_command("base_velocity")
+    robot_vel = asset.data.root_lin_vel_b[:, :2]
+    # Only penalize when command is zero AND robot isn't moving fast (not being pushed)
+    cmd_null = (cmd.norm(dim=1, p=1) < 0.05) & (robot_vel.norm(dim=1) < _ROBOT_VEL_THRESHOLD)
     return torch.norm(joint_vel, p=1, dim=1) * cmd_null
 
 
@@ -575,6 +594,8 @@ class RaibertHeuristicFootswing(ManagerTermBase):
         contact_states = periodic_contact_schedule(foot_timings, 0.05)
         swing_mask = 1 - contact_states
 
-        cmd_not_null = vel_cmd.norm(p=1, dim=1) > 0.05
+        # Activate when commanded OR when robot is moving (push recovery)
+        robot_vel = self.asset.data.root_lin_vel_b[:, :2]
+        active = (vel_cmd.norm(p=1, dim=1) > 0.05) | (robot_vel.norm(dim=1) > _ROBOT_VEL_THRESHOLD)
 
-        return torch.sum(error * swing_mask, dim=1) * cmd_not_null
+        return torch.sum(error * swing_mask, dim=1) * active
