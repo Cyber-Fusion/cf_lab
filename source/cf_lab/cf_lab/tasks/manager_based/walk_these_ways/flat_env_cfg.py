@@ -40,7 +40,8 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # Friction DR — covers Isaac Lab nominal (0.8/0.6) and Gazebo ground (1.0/1.0)
         self.events.physics_material.params["static_friction_range"] = (0.5, 1.2)
         self.events.physics_material.params["dynamic_friction_range"] = (0.4, 1.0)
-        # push_robot enabled — robot learns perturbation recovery for stability
+        # Disable push_robot in Phase 1 — isolate reward fixes from perturbation training
+        self.events.push_robot = None
 
         # ====================================================================
         # Commands (flat-specific)
@@ -49,6 +50,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.commands.base_velocity.heading_command = True
         self.commands.base_velocity.rel_heading_envs = 1.0
         self.commands.base_velocity.heading_control_stiffness = 0.5
+        self.commands.base_velocity.rel_standing_envs = 0.2  # 20% zero-command exposure (was 10%)
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
@@ -70,7 +72,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.rewards.track_base_height_exp.params["sensor_cfg"] = None  # flat terrain
 
         self.rewards.lin_vel_z_l2.weight = -2.0
-        self.rewards.ang_vel_xy_l2.weight = -1.0
+        self.rewards.ang_vel_xy_l2.weight = -0.05
 
         self.rewards.joint_vel_l2.weight = -1.0e-3
         self.rewards.joint_acc_l2.weight = -2.5e-7
@@ -92,7 +94,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.rewards.base_height_l2.weight = -30.0  # reduced from -160; additive term now provides primary gradient
         self.rewards.base_height_l2.params["sensor_cfg"] = None  # flat terrain
 
-        self.rewards.feet_slip.weight = -4.0
+        self.rewards.feet_slip.weight = -0.04
 
         self.rewards.undesired_contacts.weight = -8.0
 
@@ -106,7 +108,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # Curriculum (flat-specific)
         # ====================================================================
         # Slower sigma annealing over ~2000 iterations to max.
-        self.curriculum.sigma_exp_neg_anneal.params["anneal_steps"] = 120000
+        self.curriculum.sigma_exp_neg_anneal.params["anneal_steps"] = 72000
         # Cap sigma_max at 5.0 (default 20.0). With positive gait reward in
         # the exp-neg gate, high sigma causes astronomical reward amplification
         # that drowns out velocity tracking. sigma=5 enforces good behavior
@@ -114,15 +116,20 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # best velocity tracking (error_vel_xy=0.28 at sigma=2.2 vs 0.52 at sigma=20).
         self.curriculum.sigma_exp_neg_anneal.params["sigma_max"] = 5.0
 
+        # Velocity curriculum caps — AYG can't reach Go1 speeds
+        self.curriculum.velocity_curriculum.params["max_lin_vel_x"] = 2.0
+        self.curriculum.velocity_curriculum.params["max_lin_vel_y"] = 1.0
+        self.curriculum.velocity_curriculum.params["max_ang_vel_z"] = 3.0
+
         # ====================================================================
         # Disabled terms (override rough-specific weights back to zero)
         # ====================================================================
-        self.rewards.footswing_height.weight = -30.0  # now ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
+        self.rewards.footswing_height.weight = -3.0  # ADDITIVE; foot_clearance (-30 exp-neg) dominates trajectory shape
         self.rewards.footswing_height.params["height_scanner_cfg"] = None
         self.rewards.body_pitch_tracking.weight = 0.0
         self.rewards.body_roll_l2.weight = 0.0
-        self.rewards.stand_when_zero_command.weight = -2.0  # now ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
-        self.rewards.stand_still_when_zero_command.weight = -0.5  # now ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
+        self.rewards.stand_when_zero_command.weight = -0.5  # ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
+        self.rewards.stand_still_when_zero_command.weight = -0.2  # ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
         self.rewards.joint_deviation_l1.weight = 0.0
 
 
