@@ -119,7 +119,7 @@ class CommandsCfg:
             offsets4=(0.0, 0.0),  # Phase offsets4 range [0-1]
             feet_height=(0.05, 0.2),
             base_height=(0.20, 0.40),
-            body_pitch=(-0.4, -0.4),
+            body_pitch=(-0.4, 0.4),
             body_roll=(-0.2, 0.2),
         ),
     )
@@ -224,9 +224,9 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
-            "restitution_range": (0.0, 0.0),
+            "static_friction_range": (0.3, 1.0),
+            "dynamic_friction_range": (0.3, 0.8),
+            "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
         },
     )
@@ -489,6 +489,16 @@ class CurriculumCfg:
 
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
+    # Anneal sigma: exp-negative gate starts weak -> grows strict
+    sigma_exp_neg_anneal = CurrTerm(
+        func=mdp.anneal_sigma_exp_neg,
+        params={
+            "sigma_min": 1.0,
+            "sigma_max": 20.0,
+            "anneal_steps": 24000,
+        },
+    )
+
 
 ##
 # Environment configuration
@@ -510,11 +520,6 @@ class LocomotionWalkTheseWaysRoughEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
     events: EventCfg = EventCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
-
-    # Reward computation settings
-    sigma_min: float = 1.0
-    sigma_max: float = 20.0
-    total_anneal_steps: int = 1000
 
     def __post_init__(self):
         """Post initialization."""

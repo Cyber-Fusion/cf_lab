@@ -19,27 +19,18 @@ class ExpNegativeRewardManager(RewardManager):
     """RewardManager with exp_negative reward type support.
 
     When reward_type is "exp_negative", the total reward is computed as:
-        R = sum(positive_terms * dt) * exp(sum(negative_terms) / sigma)
+        R = sum(additive_terms * dt) * exp(sum(exp_negative_terms * dt) * sigma)
 
-    Positive terms are scaled by dt (standard RL reward accumulation).
-    Negative terms go into the exponential WITHOUT dt, so their magnitude
-    is independent of the simulation timestep. sigma is annealed from
-    sigma_start to sigma_end over total_anneal_steps to allow gentle
-    penalties early in training and aggressive enforcement later.
+    sigma is annealed externally via curriculum (anneal_sigma_exp_neg).
+    Early training: sigma is low, exp gate ~ 1, policy focuses on velocity tracking.
+    Late training: sigma is high, exp gate suppresses reward when behavior is poor.
     """
 
-    def __init__(self, cfg, env, sigma_min=1.0, sigma_max=5.0, total_anneal_steps=1000):
+    def __init__(self, cfg, env, sigma=1.0):
         super().__init__(cfg, env)
-        self.sigma_min = sigma_min
-        self.sigma_max = sigma_max
-        self.total_anneal_steps = total_anneal_steps
-        self._global_step = 0
+        self.sigma = sigma
 
     def compute(self, dt: float) -> torch.Tensor:
-        self._global_step += 1.0 / 24
-        progress = min((self._global_step / (self.total_anneal_steps)) ** 2, 1.0)
-        sigma_exp_neg = self.sigma_min + (self.sigma_max - self.sigma_min) * progress
-
         # R = sum(additive * dt) * exp(sum(exp_negative * dt) * sigma)
         self._reward_buf[:] = 0.0
         negative_reward = torch.zeros_like(self._reward_buf)
@@ -68,7 +59,7 @@ class ExpNegativeRewardManager(RewardManager):
             self._step_reward[:, term_idx] = value / dt
 
         # apply exponential negative scaling
-        self._reward_buf *= torch.exp(negative_reward * sigma_exp_neg)
+        self._reward_buf *= torch.exp(negative_reward * self.sigma)
         return self._reward_buf
 
 
@@ -87,7 +78,5 @@ class WTWManagerBasedRLEnv(ManagerBasedRLEnv):
         self.reward_manager = ExpNegativeRewardManager(
             self.cfg.rewards,
             self,
-            sigma_min=getattr(self.cfg, "sigma_min", 1.0),
-            sigma_max=getattr(self.cfg, "sigma_max", 5.0),
-            total_anneal_steps=getattr(self.cfg, "total_anneal_steps", 1000),
+            sigma=getattr(self.cfg, "sigma", 1.0),
         )

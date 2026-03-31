@@ -53,3 +53,28 @@ def terrain_levels_vel(
     terrain.update_env_origins(env_ids, move_up, move_down)
     # return the mean terrain level
     return torch.mean(terrain.terrain_levels.float())
+
+
+def anneal_sigma_exp_neg(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    sigma_min: float = 1.0,
+    sigma_max: float = 20.0,
+    anneal_steps: int = 1000,
+) -> float:
+    """Quadratically anneal the exp-negative sigma coefficient.
+
+    sigma = sigma_min + (sigma_max - sigma_min) * min((step/(env_steps*anneal_steps))^2, 1.0)
+
+    Early training: sigma is low, exp gate ~ 1, policy focuses on velocity tracking.
+    Late training: sigma is high, exp gate suppresses reward when behavior is poor.
+
+    Returns:
+        The current sigma value (for logging).
+    """
+    env_steps = 24
+    
+    progress = min(env.common_step_counter / (env_steps*anneal_steps), 1.0)
+    new_val = sigma_min + (sigma_max - sigma_min) * (progress**2)
+    env.reward_manager.sigma = new_val
+    return new_val
