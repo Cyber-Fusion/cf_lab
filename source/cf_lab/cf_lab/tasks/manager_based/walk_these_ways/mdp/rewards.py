@@ -439,27 +439,50 @@ def air_time_reward(
 def stand_when_zero_command(
     env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
-    """Penalize joint positions that deviate from default when no command AND robot is slow."""
+    """Penalize joint positions that deviate from default when no command.
+
+    Gated by:
+    - Robot velocity: deactivates during push recovery so the robot can
+      freely move joints to regain balance.
+    - Commanded pitch/roll: fades out when orientation_control demands a
+      non-zero pose, avoiding conflicting gradients.
+    """
     asset: Articulation = env.scene[asset_cfg.name]
     diff_angle = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
-    cmd = env.command_manager.get_command("base_velocity")
+
+    cmd_null = env.command_manager.get_command("base_velocity").norm(dim=1, p=1) < 0.05
+
+    # Deactivate during push recovery
     robot_vel = asset.data.root_lin_vel_b[:, :2]
-    # Only penalize when command is zero AND robot isn't moving fast (not being pushed)
-    cmd_null = (cmd.norm(dim=1, p=1) < 0.05) & (robot_vel.norm(dim=1) < _ROBOT_VEL_THRESHOLD)
-    return torch.norm(diff_angle, p=1, dim=1) * cmd_null
+    vel_ok = robot_vel.norm(dim=1) < _ROBOT_VEL_THRESHOLD
+
+    # Fade out when commanded pitch/roll are non-zero
+    gait_cmd = env.command_manager.get_command("gait_command")
+    orientation_gate = torch.exp(
+        -10.0 * (gait_cmd[:, IDX_BODY_PITCH] ** 2 + gait_cmd[:, IDX_BODY_ROLL] ** 2)
+    )
+
+    return torch.norm(diff_angle, p=1, dim=1) * cmd_null * vel_ok * orientation_gate
 
 
 def stand_still_when_zero_command(
     env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
-    """Penalize joint velocities when no command AND robot is slow."""
+    """Penalize joint velocities when no command.
+
+    Gated by robot velocity: deactivates during push recovery so the robot
+    can freely adjust to regain balance before settling.
+    """
     asset: Articulation = env.scene[asset_cfg.name]
     joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
-    cmd = env.command_manager.get_command("base_velocity")
+
+    cmd_null = env.command_manager.get_command("base_velocity").norm(dim=1, p=1) < 0.05
+
+    # Deactivate during push recovery
     robot_vel = asset.data.root_lin_vel_b[:, :2]
-    # Only penalize when command is zero AND robot isn't moving fast (not being pushed)
-    cmd_null = (cmd.norm(dim=1, p=1) < 0.05) & (robot_vel.norm(dim=1) < _ROBOT_VEL_THRESHOLD)
-    return torch.norm(joint_vel, p=1, dim=1) * cmd_null
+    vel_ok = robot_vel.norm(dim=1) < _ROBOT_VEL_THRESHOLD
+
+    return torch.norm(joint_vel, p=1, dim=1) * cmd_null * vel_ok
 
 
 # ---------------------------------------------------------------------------

@@ -36,12 +36,12 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # ====================================================================
         # Events (flat-specific overrides)
         # ====================================================================
-        self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 3.0)
+        self.events.add_base_mass.params["mass_distribution_params"] = (-2.0, 2.0)
         # Friction DR — covers Isaac Lab nominal (0.8/0.6) and Gazebo ground (1.0/1.0)
         self.events.physics_material.params["static_friction_range"] = (0.5, 1.2)
         self.events.physics_material.params["dynamic_friction_range"] = (0.4, 1.0)
         # Push robot for perturbation recovery training (Phase 2)
-        self.events.push_robot.params["velocity_range"] = {"x": (-0.3, 0.3), "y": (-0.3, 0.3)}
+        self.events.push_robot.params["velocity_range"] = {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}
         self.events.push_robot.interval_range_s = (15.0, 25.0)
 
         # ====================================================================
@@ -60,7 +60,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.commands.gait_command.ranges.frequencies = (2.0, 4.0)
         self.commands.gait_command.ranges.durations = (0.5, 0.5)
         self.commands.gait_command.ranges.feet_height = (0.05, 0.2)
-        self.commands.gait_command.ranges.base_height = (0.20, 0.40)
+        self.commands.gait_command.ranges.base_height = (0.25, 0.35)
         self.commands.gait_command.ranges.body_pitch = (-0.4, 0.4)
         self.commands.gait_command.ranges.body_roll = (-0.2, 0.2)
 
@@ -85,14 +85,14 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # ====================================================================
         # Rewards (flat-specific weights — EXP_NEGATIVE terms)
         # ====================================================================
-        self.rewards.gait.weight = 16.0
+        self.rewards.gait.weight = 10.0
         self.rewards.gait.params["gait_force_sigma"] = 50.0
         self.rewards.gait.params["gait_vel_sigma"] = 1.0
         self.rewards.gait.params["kappa_gait_probs"] = 0.07
 
         self.rewards.orientation_control.weight = -40.0
 
-        self.rewards.base_height_l2.weight = -30.0  # reduced from -160; additive term now provides primary gradient
+        self.rewards.base_height_l2.weight = -50.0  # strengthened to enforce height against dominant gait reward
         self.rewards.base_height_l2.params["sensor_cfg"] = None  # flat terrain
 
         self.rewards.feet_slip.weight = -0.04
@@ -115,7 +115,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # that drowns out velocity tracking. sigma=5 enforces good behavior
         # while keeping tracking viable. Tuning confirmed: sigma=2-5 gives
         # best velocity tracking (error_vel_xy=0.28 at sigma=2.2 vs 0.52 at sigma=20).
-        self.curriculum.sigma_exp_neg_anneal.params["sigma_max"] = 5.0
+        self.curriculum.sigma_exp_neg_anneal.params["sigma_max"] = 3.0
 
         # Velocity curriculum caps — AYG can't reach Go1 speeds
         self.curriculum.velocity_curriculum.params["max_lin_vel_x"] = 2.0
@@ -125,7 +125,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # ====================================================================
         # Disabled terms (override rough-specific weights back to zero)
         # ====================================================================
-        self.rewards.footswing_height.weight = -3.0  # ADDITIVE; foot_clearance (-30 exp-neg) dominates trajectory shape
+        self.rewards.footswing_height.weight = 0.0  # disabled; foot_clearance (-30 exp-neg) provides correct triangular trajectory
         self.rewards.footswing_height.params["height_scanner_cfg"] = None
         self.rewards.body_pitch_tracking.weight = 0.0
         self.rewards.body_roll_l2.weight = 0.0
