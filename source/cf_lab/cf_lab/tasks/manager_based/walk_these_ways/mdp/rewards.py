@@ -24,6 +24,21 @@ if TYPE_CHECKING:
     from isaaclab.managers import RewardTermCfg
 
 
+def _locomotion_gate(env: ManagerBasedRLEnv, cmd_threshold: float = 0.05, vel_threshold: float = 0.3) -> torch.Tensor:
+    """Return a per-env boolean mask that is True when the robot should be locomoting.
+
+    The mask is True when **either**:
+    - the velocity command (lin_x, lin_y, ang_z) L1 norm exceeds *cmd_threshold*, OR
+    - the actual base planar linear + yaw velocity L1 norm exceeds *vel_threshold*.
+    """
+    cmd = env.command_manager.get_command("base_velocity")
+    asset: RigidObject = env.scene["robot"]
+    cmd_active = cmd.norm(p=1, dim=1) > cmd_threshold
+    body_vel = torch.cat([asset.data.root_lin_vel_w[:, :2], asset.data.root_ang_vel_w[:, 2:3]], dim=1)
+    vel_active = body_vel.norm(p=1, dim=1) > vel_threshold
+    return cmd_active | vel_active
+
+
 def track_base_height_exp(
     env: ManagerBasedRLEnv, std: float, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ):
@@ -151,10 +166,7 @@ class GaitRewardQuad(ManagerTermBase):
         # Combine rewards
         total_reward = force_reward + velocity_reward
 
-        cmd_not_null = env.command_manager.get_command("base_velocity").norm(p=1, dim=1) > 0.05
-
-        total_reward = total_reward * cmd_not_null
-        return total_reward
+        return total_reward * _locomotion_gate(env)
 
     def compute_contact_targets(self, gait_params):
         """Calculate desired contact states for the current timestep."""
@@ -228,13 +240,11 @@ class FootSwingHeightQuad(GaitRewardQuad):
 
         feet_heights = self.asset.data.body_pos_w[:, self.asset_cfg.body_ids, 2]
 
-        cmd_not_null = self.env.command_manager.get_command("base_velocity").norm(p=1, dim=1) > 0.05
-
         return torch.sum(
             torch.square(feet_heights - cmd_height) \
                 * (1 - desired_contacts[:, :]),
             dim=1
-        ) * cmd_not_null
+        ) * _locomotion_gate(self.env)
 
     def __call__(
         self,
@@ -313,7 +323,7 @@ class FootClearanceCmdLinearQuad(GaitRewardQuad):
 
         # Penalize only swing feet
         rew_foot_clearance = torch.square(target_height - foot_height) * (1 - desired_contact_states)
-        return torch.sum(rew_foot_clearance, dim=1)
+        return torch.sum(rew_foot_clearance, dim=1) * _locomotion_gate(env)
 
 
 class GaitReward(ManagerTermBase):
@@ -854,26 +864,40 @@ def stand_when_zero_command(
     asset: Articulation = env.scene[asset_cfg.name]
     diff_angle = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
 
-    cmd_null = env.command_manager.get_command("base_velocity").norm(dim=1, p=1) < 0.05
-
-    return (
-        torch.norm(diff_angle, p=1, dim=1)
-    ) * cmd_null
+    return torch.norm(diff_angle, p=1, dim=1) * ~_locomotion_gate(env)
 
 
 def stand_still_when_zero_command(
     env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
-    """Penalize joint positions that deviate from the default one when no command."""
+    """Penalize joint velocities when no command."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
 
-    cmd_null = env.command_manager.get_command("base_velocity").norm(dim=1, p=1) < 0.05
+    return torch.norm(joint_vel, p=1, dim=1) * ~_locomotion_gate(env)
 
-    return (
-        torch.norm(joint_vel, p=1, dim=1)
-    ) * cmd_null
+
+def zero_vel_when_zero_command(
+    env,
+    command_name: str,
+    cmd_threshold: float = 0.05,
+    yaw_weight: float = 0.5,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize base linear and angular velocity when the velocity command is zero.
+
+    Returns ``||v_xy|| + yaw_weight * |yaw_rate|`` masked to only apply when the command L1 norm
+    is below *cmd_threshold*. Use with a negative weight.
+    """
+    cmd = env.command_manager.get_command(command_name)
+    zero_cmd_mask = cmd.norm(p=1, dim=1) <= cmd_threshold
+
+    asset: RigidObject = env.scene[asset_cfg.name]
+    lin_vel_xy = torch.norm(asset.data.root_lin_vel_w[:, :2], dim=1)
+    yaw_rate = torch.abs(asset.data.root_ang_vel_w[:, 2])
+
+    return (lin_vel_xy + yaw_weight * yaw_rate) * zero_cmd_mask
 
 
 class RaibertHeuristicReward(ManagerTermBase):
@@ -938,7 +962,7 @@ class RaibertHeuristicReward(ManagerTermBase):
         desired = torch.cat((desired_xs.unsqueeze(2), desired_ys.unsqueeze(2)), dim=2)  # (N, 4, 2)
 
         err = torch.abs(desired - body_frame[:, :, 0:2])
-        return torch.sum(torch.square(err), dim=(1, 2))
+        return torch.sum(torch.square(err), dim=(1, 2)) * _locomotion_gate(env)
 
 
 def feet_regulation(
