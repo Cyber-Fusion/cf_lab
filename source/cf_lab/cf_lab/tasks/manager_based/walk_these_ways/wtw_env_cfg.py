@@ -365,8 +365,6 @@ class RewardsCfg:
         weight=0.0,
         params={
             "foot_radius": 0.02,
-            "tracking_contacts_shaped_force": -1.0,
-            "tracking_contacts_shaped_vel": -1.0,
             "gait_force_sigma": 50.0,
             "gait_vel_sigma": 1.0,
             "kappa_gait_probs": 0.07,
@@ -421,14 +419,24 @@ class RewardsCfg:
         params={"command_name": "base_velocity"},
     )
 
+    stand_still_base_vel = RewTerm(
+        func=mdp.stand_still_base_vel,
+        weight=-0.0,
+        params={"command_name": "base_velocity"},
+    )
+
+    track_zero_vel_exp = RewTerm(
+        func=mdp.track_zero_vel_exp,
+        weight=0.0,
+        params={"command_name": "base_velocity", "std": 0.05},
+    )
+
     # ======================================================================= #
 
     gait = RewTerm(
         func=mdp.GaitRewardQuad,
         weight=0.0,
         params={
-            "tracking_contacts_shaped_force": -1.0,
-            "tracking_contacts_shaped_vel": -1.0,
             "gait_force_sigma": 50.0,
             "gait_vel_sigma": 1.0,
             "kappa_gait_probs": 0.07,
@@ -442,9 +450,6 @@ class RewardsCfg:
         func=mdp.FootSwingHeightQuad,
         weight=-0.0,
         params={
-            "target_height": 0.15,
-            "tracking_contacts_shaped_force": -1.0,
-            "tracking_contacts_shaped_vel": -1.0,
             "gait_force_sigma": 50.0,
             "gait_vel_sigma": 1.0,
             "kappa_gait_probs": 0.07,

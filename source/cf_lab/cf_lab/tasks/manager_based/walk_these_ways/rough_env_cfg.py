@@ -25,7 +25,7 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.scene.robot = AYG_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
         # per-joint action scale: HAA smaller to prevent spider stance
-        self.actions.joint_pos.scale = {".*HAA": 0.125, ".*HFE": 0.25, ".*KFE": 0.25}
+        self.actions.joint_pos.scale = {".*HAA": 0.125, ".*HFE": 0.3, ".*KFE": 0.3}
 
         # event — push_robot inherited from base config (interval, ±0.5 m/s) for robustness
         self.events.add_base_mass.params["mass_distribution_params"] = (-1.0, 2.0)

@@ -59,8 +59,22 @@ def get_gait_phase(env: ManagerBasedRLEnv) -> torch.Tensor:
 def get_gait_command(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     """Get the current gait command parameters as observation.
 
+    For standing envs (zero velocity command), zeros out stepping-related
+    parameters (frequency, duration, offsets, feet_height) to give the
+    policy a clear "don't step" signal. Posture commands (base_height,
+    pitch, roll) are preserved so the robot can track its standing posture.
+
     Returns:
         torch.Tensor: The 9D gait command [freq, dur, off2, off3, off4,
                       feet_h, base_h, pitch, roll]. Shape: (num_envs, 9).
     """
-    return env.command_manager.get_command(command_name)
+    gait_cmd = env.command_manager.get_command(command_name).clone()
+
+    vel_cmd = env.command_manager.get_command("base_velocity")
+    standing = vel_cmd.norm(dim=1, p=1) < 0.05  # (N,)
+
+    # Zero out stepping params for standing envs.
+    # Keep posture commands: base_height (idx 6), pitch (idx 7), roll (idx 8).
+    gait_cmd[standing, :6] = 0.0   # freq, dur, off2, off3, off4, feet_height
+
+    return gait_cmd

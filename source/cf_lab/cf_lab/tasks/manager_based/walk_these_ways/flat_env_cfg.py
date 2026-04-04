@@ -51,13 +51,13 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.commands.base_velocity.heading_command = True
         self.commands.base_velocity.rel_heading_envs = 1.0
         self.commands.base_velocity.heading_control_stiffness = 0.5
-        self.commands.base_velocity.rel_standing_envs = 0.2  # 20% zero-command exposure (was 10%)
+        self.commands.base_velocity.rel_standing_envs = 0.3  # 30% zero-command exposure (was 20%)
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
 
         # Gait command ranges
-        self.commands.gait_command.ranges.frequencies = (2.0, 4.0)
+        self.commands.gait_command.ranges.frequencies = (1.5, 3.0)
         self.commands.gait_command.ranges.durations = (0.5, 0.5)
         self.commands.gait_command.ranges.feet_height = (0.05, 0.2)
         self.commands.gait_command.ranges.base_height = (0.25, 0.35)
@@ -129,9 +129,12 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.rewards.footswing_height.params["height_scanner_cfg"] = None
         self.rewards.body_pitch_tracking.weight = 0.0
         self.rewards.body_roll_l2.weight = 0.0
-        self.rewards.stand_when_zero_command.weight = -1.0  # ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
-        self.rewards.stand_still_when_zero_command.weight = -0.3  # ADDITIVE (removed from _EXP_NEGATIVE_TERMS)
-        self.rewards.joint_deviation_l1.weight = 0.0
+        self.rewards.stand_when_zero_command.weight = 0.0  # DISABLED: q-ref pulls toward default joints, conflicts with posture tracking
+        self.rewards.stand_still_when_zero_command.weight = 0.0  # DISABLED: joint vel penalty conflicts with posture (height/pitch/roll) tracking
+        self.rewards.stand_still_base_vel.weight = -0.5  # ADDITIVE: directly penalize base drift at zero command
+        self.rewards.track_zero_vel_exp.weight = 8.0  # ADDITIVE: exp reward for zero velocity at zero command
+        self.rewards.track_zero_vel_exp.params["std"] = 0.2  # wide enough to provide gradient at typical drift speeds
+        self.rewards.joint_deviation_l1.weight = -0.03  # gentle regularization to prevent HAA splay
 
 
 class AygFlatWTWEnvCfg_PLAY(AygFlatWTWEnvCfg):

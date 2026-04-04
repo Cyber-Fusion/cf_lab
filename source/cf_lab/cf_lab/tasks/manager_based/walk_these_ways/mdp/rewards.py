@@ -43,7 +43,8 @@ IDX_BODY_ROLL = 8
 
 # Velocity threshold for push recovery: gait rewards re-activate when
 # the robot is moving faster than this even if command is zero.
-_ROBOT_VEL_THRESHOLD = 0.15
+# 0.3 m/s prevents tapping-induced self-activation (was 0.15).
+_ROBOT_VEL_THRESHOLD = 0.3
 
 
 def compute_per_foot_timings(
@@ -118,8 +119,6 @@ class GaitRewardQuad(ManagerTermBase):
     def __call__(
         self,
         env: ManagerBasedRLEnv,
-        tracking_contacts_shaped_force,
-        tracking_contacts_shaped_vel,
         gait_force_sigma,
         gait_vel_sigma,
         kappa_gait_probs,
@@ -237,9 +236,6 @@ class FootSwingHeightQuad(GaitRewardQuad):
     def __call__(
         self,
         env: ManagerBasedRLEnv,
-        target_height,
-        tracking_contacts_shaped_force,
-        tracking_contacts_shaped_vel,
         gait_force_sigma,
         gait_vel_sigma,
         kappa_gait_probs,
@@ -271,8 +267,6 @@ class FootClearanceCmdLinearQuad(GaitRewardQuad):
     def __call__(
         self,
         env: ManagerBasedRLEnv,
-        tracking_contacts_shaped_force,
-        tracking_contacts_shaped_vel,
         gait_force_sigma,
         gait_vel_sigma,
         kappa_gait_probs,
@@ -470,19 +464,57 @@ def stand_still_when_zero_command(
 ) -> torch.Tensor:
     """Penalize joint velocities when no command.
 
-    Gated by robot velocity: deactivates during push recovery so the robot
-    can freely adjust to regain balance before settling.
+    Gated by robot velocity at 0.3 m/s: deactivates during push recovery
+    so the robot can freely adjust to regain balance.
     """
     asset: Articulation = env.scene[asset_cfg.name]
     joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
 
     cmd_null = env.command_manager.get_command("base_velocity").norm(dim=1, p=1) < 0.05
 
-    # Deactivate during push recovery
+    # Deactivate during push recovery (threshold 0.3 m/s, up from 0.15)
     robot_vel = asset.data.root_lin_vel_b[:, :2]
     vel_ok = robot_vel.norm(dim=1) < _ROBOT_VEL_THRESHOLD
 
     return torch.norm(joint_vel, p=1, dim=1) * cmd_null * vel_ok
+
+
+def stand_still_base_vel(
+    env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Penalize base linear velocity when no velocity command.
+
+    Directly penalizes the robot's translational velocity rather than joint
+    velocities, targeting the actual symptom (base drift) during standing.
+    No velocity gate — always active at zero command so the robot is always
+    incentivized to stop, even when recovering from a push.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    base_vel = asset.data.root_lin_vel_b[:, :2]
+
+    cmd_null = env.command_manager.get_command(command_name).norm(dim=1, p=1) < 0.05
+
+    return base_vel.norm(dim=1) * cmd_null
+
+
+def track_zero_vel_exp(
+    env, command_name: str, std: float = 0.05, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Tight exponential reward for achieving zero base velocity at zero command.
+
+    Unlike track_lin_vel_xy_exp (std=0.5, almost flat near zero), this uses a
+    tight kernel that strongly distinguishes standing still from slight drift:
+        std=0.05: vel=0→1.0, vel=0.05→0.37, vel=0.1→0.018, vel=0.2→≈0
+
+    Only active for zero-command envs. Provides the critical gradient signal
+    that the wide-kernel tracking reward cannot.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    base_vel = asset.data.root_lin_vel_b[:, :2]
+
+    cmd_null = (env.command_manager.get_command(command_name).norm(dim=1, p=1) < 0.05).float()
+
+    return torch.exp(-base_vel.norm(dim=1).square() / (std ** 2)) * cmd_null
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +530,10 @@ def orientation_control(
 
     Extracts current pitch and roll from projected gravity vector in body frame
     and compares to commanded values from the gait command.
+
+    Tracks commanded pitch/roll at all times, including zero velocity command.
+    Standing still with a target posture (height + pitch + roll) is achieved
+    by base velocity rewards, not by zeroing orientation targets.
     """
     asset: RigidObject = env.scene[asset_cfg.name]
 
