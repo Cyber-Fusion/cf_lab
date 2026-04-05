@@ -113,7 +113,7 @@ class CommandsCfg:
         resampling_time_range=(5.0, 5.0),  # Fixed resampling time of 5 seconds
         debug_vis=False,  # No debug visualization needed
         ranges=mdp.UniformGaitCommandCfgQuad.Ranges(
-            frequencies=(2.0, 4.0),  # Gait frequency range [Hz]
+            frequencies=(1.5, 3.0),  # Gait frequency range [Hz]
             durations=(0.5, 0.5),  # Contact duration range [0-1]
             offsets2=(0.5, 0.5),  # Phase offsets2 range [0-1]
             offsets3=(0.0, 0.0),  # Phase offsets3 range [0-1]
@@ -134,7 +134,7 @@ class CommandsCfg:
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-0.0, 0.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-0.0, 0.0), heading=(-math.pi, math.pi)
         ),
     )
 
@@ -177,7 +177,7 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
-            self.history_length = 1
+            self.history_length = 5
             self.flatten_history_dim = True
 
     @configclass
@@ -206,7 +206,7 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
-            self.history_length = 1
+            self.history_length = 5
             self.flatten_history_dim = True
 
     # observation groups
@@ -224,8 +224,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.3, 1.0),
-            "dynamic_friction_range": (0.3, 0.8),
+            "static_friction_range": (0.5, 1.2),
+            "dynamic_friction_range": (0.4, 1.0),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
@@ -236,32 +236,32 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name),
-            "mass_distribution_params": (-2.5, 5.0),
+            "mass_distribution_params": (-5.0, 5.0),
             "operation": "add",
         },
     )
 
-    # randomize_robot_center_of_mass = EventTerm(
-    #     func=mdp.randomize_rigid_body_coms,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot"),
-    #         "com_distribution_params": ((-0.05, 0.05), (-0.05, 0.05), (-0.05, 0.05)),
-    #         "operation": "add",
-    #         "distribution": "uniform",
-    #     },
-    # )
+    randomize_robot_center_of_mass = EventTerm(
+        func=mdp.randomize_rigid_body_coms,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "com_distribution_params": ((-0.05, 0.05), (-0.05, 0.05), (-0.05, 0.05)),
+            "operation": "add",
+            "distribution": "uniform",
+        },
+    )
 
     # reset
-    # base_external_force_torque = EventTerm(
-    #     func=mdp.apply_external_force_torque,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name),
-    #         "force_range": (-10.0, 10.0),
-    #         "torque_range": (-5.0, 5.0),
-    #     },
-    # )
+    base_external_force_torque = EventTerm(
+        func=mdp.apply_external_force_torque,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name),
+            "force_range": (-10.0, 10.0),
+            "torque_range": (-5.0, 5.0),
+        },
+    )
 
     reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
@@ -480,7 +480,7 @@ class CurriculumCfg:
         func=mdp.anneal_sigma_exp_neg,
         params={
             "sigma_min": 1.0,
-            "sigma_max": 20.0,
+            "sigma_max": 5.0,
             "anneal_steps": 24000,
         },
     )
