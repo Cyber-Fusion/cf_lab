@@ -139,6 +139,34 @@ def get_gait_command(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     return env.command_manager.get_command(command_name)
 
 
+def base_external_force_torque(
+    env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """External force and torque applied to the base body.
+
+    Returns the concatenated force (3) and torque (3) vectors. Shape: (num_envs, 6).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    forces = asset.permanent_wrench_composer.composed_force_as_torch[:, asset_cfg.body_ids, :]
+    torques = asset.permanent_wrench_composer.composed_torque_as_torch[:, asset_cfg.body_ids, :]
+    return torch.cat([forces.reshape(env.num_envs, -1), torques.reshape(env.num_envs, -1)], dim=-1)
+
+
+def friction_coefficients(
+    env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Average static and dynamic friction coefficients across all shapes.
+
+    Returns the mean (static_friction, dynamic_friction). Shape: (num_envs, 2).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    # material_properties shape: (num_envs, total_num_shapes, 3)
+    # channels: (static_friction, dynamic_friction, restitution)
+    materials = asset.root_physx_view.get_material_properties()
+    # Average across all shapes, keep only static + dynamic friction -> (num_envs, 2)
+    return materials[:, :, :2].mean(dim=1)
+
+
 def robot_base_pose(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """pose of the robot base"""
     asset: Articulation = env.scene[asset_cfg.name]

@@ -28,6 +28,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # null out height_scanner refs in reward params for flat terrain
         self.rewards.base_height_l2.params["sensor_cfg"] = None
         self.rewards.footswing_height.params["height_scanner_cfg"] = None
+        self.rewards.foot_clearance.params["height_scanner_cfg"] = None
         # no terrain curriculum
         self.curriculum.terrain_levels = None
 

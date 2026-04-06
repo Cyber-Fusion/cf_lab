@@ -202,6 +202,14 @@ class ObservationsCfg:
             noise=Unoise(n_min=-0.1, n_max=0.1),
             clip=(-1.0, 1.0),
         )
+        # privileged observations
+        external_force_torque = ObsTerm(
+            func=mdp.base_external_force_torque,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name)},
+        )
+        friction = ObsTerm(
+            func=mdp.friction_coefficients,
+        )
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -226,18 +234,30 @@ class EventCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
             "static_friction_range": (0.5, 1.2),
             "dynamic_friction_range": (0.4, 1.0),
-            "restitution_range": (0.0, 0.0),
+            "restitution_range": (0.0, 0.5),
             "num_buckets": 64,
         },
     )
 
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
-        mode="startup",
+        mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name),
             "mass_distribution_params": (-5.0, 5.0),
             "operation": "add",
+            "recompute_inertia": True,
+        },
+    )
+
+    randomize_rigid_body_mass_others = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "mass_distribution_params": (0.9, 1.1),
+            "operation": "scale",
+            "recompute_inertia": True,
         },
     )
 
@@ -252,13 +272,25 @@ class EventCfg:
         },
     )
 
+    randomize_actuator_gains = EventTerm(
+        func=mdp.randomize_actuator_gains,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
+            "stiffness_distribution_params": (0.9, 1.1),
+            "damping_distribution_params": (0.9, 1.1),
+            "operation": "scale",
+            "distribution": "uniform",
+        },
+    )
+
     # reset
     base_external_force_torque = EventTerm(
         func=mdp.apply_external_force_torque,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name),
-            "force_range": (-10.0, 10.0),
+            "force_range": (-20.0, 20.0),
             "torque_range": (-5.0, 5.0),
         },
     )
@@ -364,6 +396,7 @@ class RewardsCfg:
             "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
+            "height_scanner_cfg": Params.height_scanner,
         },
         reward_type=RewardType.EXP_NEGATIVE,
     )

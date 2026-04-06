@@ -44,7 +44,7 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         
         self.rewards.undesired_contacts.weight = -1.0 * 8
         
-        self.rewards.stand_when_zero_command.weight = -0.0
+        self.rewards.stand_when_zero_command.weight = -1.0
         self.rewards.stand_still_when_zero_command.weight = -0.0
         self.rewards.zero_vel_when_zero_command.weight = -10.0
         

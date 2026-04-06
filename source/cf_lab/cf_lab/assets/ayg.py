@@ -20,7 +20,7 @@ from cf_lab import CF_LAB_DATA_DIR
 # Configuration - Actuators.
 ##
 
-AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DelayedPDActuatorCfg    (
+AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DelayedPDActuatorCfg(
     joint_names_expr=[".*HAA", ".*HFE", ".*KFE"],
     effort_limit=30.0,
     velocity_limit=18.849,
@@ -57,7 +57,7 @@ AYG_CFG = ArticulationCfg(
             max_depenetration_velocity=1.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=0
+            enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
         ),
         joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
             gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)

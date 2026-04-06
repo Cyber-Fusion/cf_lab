@@ -237,11 +237,12 @@ class FootSwingHeightQuad(GaitRewardQuad):
     def compute_footswing_height(self, desired_contacts):
         commands = self.env.command_manager.get_command("gait_command")
         cmd_height = commands[:, 5].unsqueeze(1)
+        adjusted_target = cmd_height + self.terrain_height.unsqueeze(1)
 
         feet_heights = self.asset.data.body_pos_w[:, self.asset_cfg.body_ids, 2]
 
         return torch.sum(
-            torch.square(feet_heights - cmd_height) \
+            torch.square(feet_heights - adjusted_target) \
                 * (1 - desired_contacts[:, :]),
             dim=1
         ) * _locomotion_gate(self.env)
@@ -264,11 +265,9 @@ class FootSwingHeightQuad(GaitRewardQuad):
 
         if height_scanner_cfg is not None:
             height_scanner: RayCaster = env.scene[height_scanner_cfg.name]
-            # Adjust the target height using the sensor data
-            self.target_height = target_height + torch.mean(height_scanner.data.ray_hits_w[..., 2], dim=1)
+            self.terrain_height = torch.mean(height_scanner.data.ray_hits_w[..., 2], dim=1)
         else:
-            # Use the provided target height directly for flat terrain
-            self.target_height = torch.full((self.num_envs,), target_height, device=self.asset.device)
+            self.terrain_height = torch.zeros(self.num_envs, device=self.asset.device)
 
         desired_contact_states = self.compute_contact_targets(gait_params)
 
@@ -303,6 +302,7 @@ class FootClearanceCmdLinearQuad(GaitRewardQuad):
         sensor_cfg,
         asset_cfg,
         foot_radius=0.02,
+        height_scanner_cfg=None,
     ) -> torch.Tensor:
         gait_params = env.command_manager.get_command(self.command_name)
 
@@ -314,9 +314,16 @@ class FootClearanceCmdLinearQuad(GaitRewardQuad):
         # Desired contact states from warped indices (for swing masking)
         desired_contact_states = self.compute_contact_targets(gait_params)
 
-        # Target height modulated by phase + foot radius offset
+        # Terrain height offset from height scanner
+        if height_scanner_cfg is not None:
+            height_scanner: RayCaster = env.scene[height_scanner_cfg.name]
+            terrain_height = torch.mean(height_scanner.data.ray_hits_w[..., 2], dim=1).unsqueeze(1)
+        else:
+            terrain_height = 0.0
+
+        # Target height modulated by phase + foot radius offset + terrain height
         cmd_height = env.command_manager.get_command("gait_command")[:, 5].unsqueeze(1)
-        target_height = cmd_height * phases + self.foot_radius
+        target_height = cmd_height * phases + self.foot_radius + terrain_height
 
         # Foot heights in world frame
         foot_height = self.asset.data.body_pos_w[:, self.asset_cfg.body_ids, 2]
