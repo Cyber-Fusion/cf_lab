@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
 from .rough_env_cfg import AygRoughWTWEnvCfg
@@ -80,7 +81,7 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.rewards.joint_torques_l2.weight = -2.0e-4
 
         self.rewards.action_rate_l2.weight = -0.01
-        self.rewards.action_smoothness_l2.weight = -0.01
+        self.rewards.action_smoothness_l2.weight = -0.03  # increased to dampen base shaking during standing
 
         # ====================================================================
         # Rewards (flat-specific weights — EXP_NEGATIVE terms)
@@ -129,8 +130,14 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         self.rewards.footswing_height.params["height_scanner_cfg"] = None
         self.rewards.body_pitch_tracking.weight = 0.0
         self.rewards.body_roll_l2.weight = 0.0
-        self.rewards.stand_when_zero_command.weight = 0.0  # DISABLED: q-ref pulls toward default joints, conflicts with posture tracking
-        self.rewards.stand_still_when_zero_command.weight = 0.0  # DISABLED: joint vel penalty conflicts with posture (height/pitch/roll) tracking
+        # HAA-only: anchor lateral leg position to default at zero cmd.
+        # HFE/KFE stay free for height/pitch/roll tracking — no conflict.
+        self.rewards.stand_when_zero_command.weight = -0.5
+        self.rewards.stand_when_zero_command.params["asset_cfg"] = SceneEntityCfg("robot", joint_names=[".*HAA"])
+        # HAA-only: penalize HAA joint velocities at zero cmd to prevent lateral drift/oscillation.
+        # HFE/KFE stay free for posture tracking — no conflict.
+        self.rewards.stand_still_when_zero_command.weight = -0.5
+        self.rewards.stand_still_when_zero_command.params["asset_cfg"] = SceneEntityCfg("robot", joint_names=[".*HAA"])
         self.rewards.stand_still_base_vel.weight = -0.5  # ADDITIVE: directly penalize base drift at zero command
         self.rewards.track_zero_vel_exp.weight = 8.0  # ADDITIVE: exp reward for zero velocity at zero command
         self.rewards.track_zero_vel_exp.params["std"] = 0.2  # wide enough to provide gradient at typical drift speeds
