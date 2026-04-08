@@ -1,6 +1,13 @@
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
-
 from isaaclab.utils import configclass
+
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoActorCriticCfg,
+    RslRlPpoAlgorithmCfg,
+    RslRlSymmetryCfg,
+)
+
+from cf_lab.tasks.direct.velocity.symmetry import compute_symmetric_states_direct
 
 
 @configclass
@@ -30,6 +37,12 @@ class AygFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
+        symmetry_cfg=RslRlSymmetryCfg(
+            use_data_augmentation=False,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_symmetric_states_direct,
+            mirror_loss_coeff=1.0,
+        ),
     )
 
 
@@ -60,4 +73,10 @@ class AygRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
+        symmetry_cfg=RslRlSymmetryCfg(
+            use_data_augmentation=False,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_symmetric_states_direct,
+            mirror_loss_coeff=1.0,
+        ),
     )
