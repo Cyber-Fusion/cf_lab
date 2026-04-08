@@ -30,6 +30,10 @@ from cf_lab.tasks.manager_based.walk_these_ways import mdp
 ##
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
+from cf_lab.tasks.manager_based.velocity.mdp.rewards import (  # isort: skip
+    ActionMirrorSymmetryPenalty,
+    JointMirrorSymmetryPenalty,
+)
 from cf_lab.tasks.manager_based.walk_these_ways.wtw_params import WalkTheseWaysParams as Params
 
 
@@ -430,6 +434,53 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
             "height_scanner_cfg": Params.height_scanner,
+        },
+    )
+
+    # -- symmetry (disabled by default, set weight < 0 to enable)
+    # HAA-only: safe for all 4 gaits (trot, pace, bound, pronk)
+    joint_mirror_haa = RewTerm(
+        func=JointMirrorSymmetryPenalty,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "left_joint_names": ["LF_HAA", "LH_HAA"],
+            "right_joint_names": ["RF_HAA", "RH_HAA"],
+            "sign_flips": [1.0, 1.0],
+        },
+    )
+
+    action_mirror_haa = RewTerm(
+        func=ActionMirrorSymmetryPenalty,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "left_joint_names": ["LF_HAA", "LH_HAA"],
+            "right_joint_names": ["RF_HAA", "RH_HAA"],
+            "sign_flips": [1.0, 1.0],
+        },
+    )
+
+    # All joints: safe ONLY for bound and pronk — conflicts with trot and pace
+    joint_mirror_all = RewTerm(
+        func=JointMirrorSymmetryPenalty,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "left_joint_names": ["LF_HAA", "LF_HFE", "LF_KFE", "LH_HAA", "LH_HFE", "LH_KFE"],
+            "right_joint_names": ["RF_HAA", "RF_HFE", "RF_KFE", "RH_HAA", "RH_HFE", "RH_KFE"],
+            "sign_flips": [1.0, -1.0, -1.0, 1.0, -1.0, -1.0],
+        },
+    )
+
+    action_mirror_all = RewTerm(
+        func=ActionMirrorSymmetryPenalty,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "left_joint_names": ["LF_HAA", "LF_HFE", "LF_KFE", "LH_HAA", "LH_HFE", "LH_KFE"],
+            "right_joint_names": ["RF_HAA", "RF_HFE", "RF_KFE", "RH_HAA", "RH_HFE", "RH_KFE"],
+            "sign_flips": [1.0, -1.0, -1.0, 1.0, -1.0, -1.0],
         },
     )
 

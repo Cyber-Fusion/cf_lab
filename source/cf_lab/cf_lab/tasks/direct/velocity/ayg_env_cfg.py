@@ -131,6 +131,10 @@ class AygFlatEnvCfg(DirectRLEnvCfg):
     base_height_reward_scale = -5.0
     foot_clearance_reward_scale = 0.25
 
+    # symmetry reward scales (disabled by default, set < 0 to enable)
+    joint_mirror_haa_reward_scale = 0.0
+    action_mirror_haa_reward_scale = 0.0
+
     # reward parameters
     feet_air_time_threshold = 0.4  # seconds: feet in air longer than this are rewarded
     base_height_target = 0.35  # meters: target base height above ground

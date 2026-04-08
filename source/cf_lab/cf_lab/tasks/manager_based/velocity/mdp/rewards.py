@@ -303,6 +303,68 @@ def foot_clearance_swing(
     return reward * (cmd > velocity_threshold).float()
 
 
+class JointMirrorSymmetryPenalty(ManagerTermBase):
+    """Penalize left-right joint position asymmetry.
+
+    For each (left, right) joint pair, computes ``(q_left + sign * q_right)^2``.
+    Use ``sign_flips=+1.0`` for joints whose axes are mirrored (HAA) so that
+    perfect symmetry satisfies ``q_L = -q_R``.  Use ``sign_flips=-1.0`` for
+    joints with the same axis direction (HFE/KFE) where ``q_L = q_R``.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        left_names = cfg.params["left_joint_names"]
+        right_names = cfg.params["right_joint_names"]
+        self._sign_flips = torch.tensor(cfg.params["sign_flips"], dtype=torch.float32, device=env.device)
+        self._left_ids = [asset.find_joints([n])[0][0] for n in left_names]
+        self._right_ids = [asset.find_joints([n])[0][0] for n in right_names]
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg,
+        left_joint_names: list[str],
+        right_joint_names: list[str],
+        sign_flips: list[float],
+    ) -> torch.Tensor:
+        asset: Articulation = env.scene[asset_cfg.name]
+        q_left = asset.data.joint_pos[:, self._left_ids]
+        q_right = asset.data.joint_pos[:, self._right_ids]
+        return torch.sum(torch.square(q_left + self._sign_flips * q_right), dim=1)
+
+
+class ActionMirrorSymmetryPenalty(ManagerTermBase):
+    """Penalize left-right action asymmetry.
+
+    Same logic as :class:`JointMirrorSymmetryPenalty` but applied to the
+    policy's action output instead of measured joint positions.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        left_names = cfg.params["left_joint_names"]
+        right_names = cfg.params["right_joint_names"]
+        self._sign_flips = torch.tensor(cfg.params["sign_flips"], dtype=torch.float32, device=env.device)
+        self._left_ids = [asset.find_joints([n])[0][0] for n in left_names]
+        self._right_ids = [asset.find_joints([n])[0][0] for n in right_names]
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg,
+        left_joint_names: list[str],
+        right_joint_names: list[str],
+        sign_flips: list[float],
+    ) -> torch.Tensor:
+        actions = env.action_manager.action
+        a_left = actions[:, self._left_ids]
+        a_right = actions[:, self._right_ids]
+        return torch.sum(torch.square(a_left + self._sign_flips * a_right), dim=1)
+
+
 def feet_regulation(
     env: ManagerBasedRLEnv,
     sensor_cfg: SceneEntityCfg = None,
