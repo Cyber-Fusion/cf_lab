@@ -12,6 +12,7 @@ Reference:
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import DelayedPDActuatorCfg
+from isaaclab.actuators import DelayedPDActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
 from cf_lab import CF_LAB_DATA_DIR
@@ -20,6 +21,7 @@ from cf_lab import CF_LAB_DATA_DIR
 # Configuration - Actuators.
 ##
 
+AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DelayedPDActuatorCfg(
 AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DelayedPDActuatorCfg(
     joint_names_expr=[".*HAA", ".*HFE", ".*KFE"],
     effort_limit=30.0,
@@ -66,9 +68,9 @@ AYG_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.36),
         joint_pos={
-            ".*HAA": 0.0,       # all HAA
-            ".*HFE": 0.0,       # all HFE
-            ".*KFE": 0.0,       # all KFE
+            ".*HAA": 0.0,  # all HAA
+            ".*HFE": 0.0,  # all HFE
+            ".*KFE": 0.0,  # all KFE
         },
         joint_vel={".*": 0.0},
     ),

@@ -75,6 +75,13 @@ tests/
 **/gelsight_r15_data/*
 
 .venv/
+# uv
+uv.lock
+
+# VSCode browse DB
+.vscode/browse.vc.db
+.vscode/browse.vc.db-shm
+.vscode/browse.vc.db-wal
 
 # Claude Code local settings (personal, not shared)
 .claude/settings.local.json

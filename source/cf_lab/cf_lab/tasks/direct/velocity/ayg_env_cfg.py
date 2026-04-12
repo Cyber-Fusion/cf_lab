@@ -26,8 +26,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
+            "static_friction_range": (0.4, 2.0),
+            "dynamic_friction_range": (0.4, 2.0),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
@@ -38,9 +38,25 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="Base"),
-            "mass_distribution_params": (-1.0, 1.0),
+            "mass_distribution_params": (-1.0, 3.0),
             "operation": "add",
         },
+    )
+
+    base_com = EventTerm(
+        func=mdp.randomize_rigid_body_com,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="Base"),
+            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
+        },
+    )
+
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(10.0, 15.0),
+        params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
 
 
@@ -49,9 +65,9 @@ class AygFlatEnvCfg(DirectRLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
-    action_scale = 0.5
+    action_scale = 0.25
     action_space = 12
-    observation_space = 48
+    observation_space = 49
     state_space = 0
 
     # simulation
@@ -92,30 +108,53 @@ class AygFlatEnvCfg(DirectRLEnvCfg):
         prim_path="/World/envs/env_.*/Robot/.*", history_length=3, update_period=0.005, track_air_time=True
     )
 
+    # command config
+    command_resample_time = 10.0  # resample commands every 10 seconds
+    rel_standing_envs = 0.02  # 2% of envs get zero-velocity commands
+    heading_control_stiffness = 0.5  # P-gain for heading-based yaw control
+
+    # observation noise
+    enable_obs_noise = True
+
     # reward scales
     lin_vel_reward_scale = 2.0
     yaw_rate_reward_scale = 1.0
     z_vel_reward_scale = -2.0
     ang_vel_reward_scale = -0.05
-    joint_torque_reward_scale = -2.5e-5
+    joint_torque_reward_scale = -1e-4
     joint_accel_reward_scale = -2.5e-7
     action_rate_reward_scale = -0.01
-    feet_air_time_reward_scale = 0.5
+    feet_air_time_reward_scale = 0.25
     undesired_contact_reward_scale = -1.0
     flat_orientation_reward_scale = -5.0
-    cosmetic_reward_scale = -0.0
+    feet_regulation_reward_scale = -0.15
+    base_height_reward_scale = -5.0
+    foot_clearance_reward_scale = 0.25
+
+    # reward parameters
+    feet_air_time_threshold = 0.4  # seconds: feet in air longer than this are rewarded
+    base_height_target = 0.35  # meters: target base height above ground
+    foot_clearance_target = 0.10  # meters: target foot height during swing phase
+
+
+@configclass
+class AygFlatEnvPlayCfg(AygFlatEnvCfg):
+    # smaller scene for play / video recording
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=50, env_spacing=2.5, replicate_physics=True)
+    # disable observation noise for play
+    enable_obs_noise = False
 
 
 @configclass
 class AygRoughEnvCfg(AygFlatEnvCfg):
     # env
-    observation_space = 235
+    observation_space = 236
 
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="generator",
         terrain_generator=ROUGH_TERRAINS_CFG,
-        max_init_terrain_level=9,
+        max_init_terrain_level=5,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
@@ -130,7 +169,7 @@ class AygRoughEnvCfg(AygFlatEnvCfg):
         debug_vis=False,
     )
 
-    # we add a height scanner for perceptive locomotion
+    # height scanner for perceptive locomotion
     height_scanner = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot/Base",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
@@ -141,4 +180,8 @@ class AygRoughEnvCfg(AygFlatEnvCfg):
     )
 
     # reward scales (override from flat config)
+    feet_air_time_reward_scale = 0.5
     flat_orientation_reward_scale = 0.0
+    feet_regulation_reward_scale = -0.0
+    base_height_reward_scale = -0.0
+    foot_clearance_reward_scale = -0.0
