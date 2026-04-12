@@ -27,7 +27,7 @@ from .ayg_params import AygParams as Params
 ##
 # Pre-defined configs
 ##
-from cf_lab.assets.ayg import AYG_CFG  # isort: skip
+from cf_lab.assets.ayg import AYG_CFG, AYG_MOTOR_SIMPLE_ACTUATOR_CFG  # isort: skip
 
 
 COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
@@ -371,7 +371,8 @@ class AygFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         super().__post_init__()
 
         # general settings
-        self.decimation = 10  # 50 Hz
+        decimation = 10
+        self.decimation = decimation  # 50 Hz
         self.episode_length_s = 20.0
         # simulation settings
         self.sim.dt = 0.002  # 500 Hz
@@ -385,7 +386,10 @@ class AygFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.contact_forces.update_period = self.sim.dt
 
         # switch robot to Ayg-d
-        self.scene.robot = AYG_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        self.scene.robot = AYG_CFG.replace(
+            prim_path="{ENV_REGEX_NS}/Robot",
+            actuators={"legs": AYG_MOTOR_SIMPLE_ACTUATOR_CFG.replace(max_delay=decimation)},
+        )
 
         # terrain
         self.scene.terrain = TerrainImporterCfg(

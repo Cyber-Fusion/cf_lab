@@ -28,10 +28,12 @@ class AygFlatWTWEnvCfg(AygRoughWTWEnvCfg):
         # null out height_scanner refs in reward params for flat terrain
         self.rewards.base_height_l2.params["sensor_cfg"] = None
         self.rewards.footswing_height.params["height_scanner_cfg"] = None
+        self.rewards.foot_clearance.params["height_scanner_cfg"] = None
         # no terrain curriculum
         self.curriculum.terrain_levels = None
 
 
+@configclass
 class AygFlatWTWEnvCfg_PLAY(AygFlatWTWEnvCfg):
     def __post_init__(self) -> None:
         # post init of parent
@@ -43,5 +45,5 @@ class AygFlatWTWEnvCfg_PLAY(AygFlatWTWEnvCfg):
         # disable randomization for play
         self.observations.policy.enable_corruption = False
         # # remove random pushing event
-        self.events.base_external_force_torque = None
+        # self.events.base_external_force_torque = None
         self.events.push_robot = None

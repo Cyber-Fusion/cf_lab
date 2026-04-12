@@ -50,3 +50,23 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygRoughWTWPPORunnerCfg",
     },
 )
+
+gym.register(
+    id="Isaac-WTW-Cobblestone-Ayg-v0",
+    entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.cobblestone_env_cfg:AygCobblestoneWTWEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygCobblestoneWTWPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Isaac-WTW-Cobblestone-Ayg-Play-v0",
+    entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.cobblestone_env_cfg:AygCobblestoneWTWEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygCobblestoneWTWPPORunnerCfg",
+    },
+)

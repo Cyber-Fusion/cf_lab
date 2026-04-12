@@ -3,15 +3,15 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
-
 from isaaclab.utils import configclass
+
+from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
 
 @configclass
 class AygRoughWTWPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 1500
+    max_iterations = 10000
     save_interval = 50
     experiment_name = "ayg_wtw_rough"
     empirical_normalization = False
@@ -42,7 +42,15 @@ class AygFlatWTWPPORunnerCfg(AygRoughWTWPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 300
+        self.max_iterations = 10000
         self.experiment_name = "ayg_wtw_flat"
         self.policy.actor_hidden_dims = [512, 256, 128]
         self.policy.critic_hidden_dims = [512, 256, 128]
+
+
+@configclass
+class AygCobblestoneWTWPPORunnerCfg(AygRoughWTWPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.experiment_name = "ayg_wtw_cobblestone"
