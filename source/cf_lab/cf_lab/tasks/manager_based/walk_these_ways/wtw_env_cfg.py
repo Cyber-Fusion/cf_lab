@@ -513,8 +513,8 @@ class CurriculumCfg:
         func=mdp.anneal_sigma_exp_neg,
         params={
             "sigma_min": 1.0,
-            "sigma_max": 5.0,
-            "anneal_steps": 24000,
+            "sigma_max": 20.0,
+            "anneal_steps": 48000,
         },
     )
 

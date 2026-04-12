@@ -164,7 +164,7 @@ class GaitRewardQuad(ManagerTermBase):
         velocity_reward = self._compute_velocity_reward(foot_velocities, desired_contact_states)
 
         # Combine rewards
-        total_reward = force_reward + velocity_reward
+        total_reward = -(force_reward + velocity_reward)
 
         return total_reward * _locomotion_gate(env)
 

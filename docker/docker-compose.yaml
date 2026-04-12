@@ -12,10 +12,12 @@ services:
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
       - DISPLAY
+      - XAUTHORITY=/root/.Xauthority
     working_dir: /workspace/cf_lab
     volumes:
       - ..:/workspace/cf_lab:rw
-      - ${HOME}/.Xauthority:/root/.Xauthority
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-${HOME}/.Xauthority}:/root/.Xauthority
       - ${HOME}/docker/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw
       - ${HOME}/docker/isaac-sim/cache/ov:/root/.cache/ov:rw
       - ${HOME}/docker/isaac-sim/cache/pip:/root/.cache/pip:rw
