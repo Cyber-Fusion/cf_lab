@@ -5,12 +5,11 @@
 
 """Left-right (sagittal) symmetry augmentation for AYG direct velocity environments.
 
-AYG joint ordering in Isaac Sim (grouped by leg, from URDF):
+AYG joint ordering in Isaac Sim (grouped by type, from articulation):
 
-    [0] LF_HAA  [1] LF_HFE  [2] LF_KFE
-    [3] RF_HAA  [4] RF_HFE  [5] RF_KFE
-    [6] LH_HAA  [7] LH_HFE  [8] LH_KFE
-    [9] RH_HAA  [10] RH_HFE [11] RH_KFE
+    [0] LF_HAA  [1] LH_HAA  [2] RF_HAA  [3] RH_HAA
+    [4] LF_HFE  [5] LH_HFE  [6] RF_HFE  [7] RH_HFE
+    [8] LF_KFE  [9] LH_KFE  [10] RF_KFE [11] RH_KFE
 
 Direct env observation layout (Layout C):
     [0:3]   base_lin_vel
@@ -35,16 +34,17 @@ __all__ = ["compute_symmetric_states_direct"]
 # AYG joint permutation and sign arrays for left-right mirror
 # ---------------------------------------------------------------------------
 
-# Expected AYG joint ordering in Isaac Sim (leg-grouped, from URDF declaration order).
+# Expected AYG joint ordering in Isaac Sim (type-grouped, from articulation).
 _EXPECTED_JOINT_ORDER = [
-    "LF_HAA", "LF_HFE", "LF_KFE",
-    "RF_HAA", "RF_HFE", "RF_KFE",
-    "LH_HAA", "LH_HFE", "LH_KFE",
-    "RH_HAA", "RH_HFE", "RH_KFE",
+    "LF_HAA", "LH_HAA", "RF_HAA", "RH_HAA",
+    "LF_HFE", "LH_HFE", "RF_HFE", "RH_HFE",
+    "LF_KFE", "LH_KFE", "RF_KFE", "RH_KFE",
 ]
 
-_JOINT_PERM = [3, 4, 5, 0, 1, 2, 9, 10, 11, 6, 7, 8]
-_JOINT_SIGN: list[float] = [-1, 1, 1, -1, 1, 1, -1, 1, 1, -1, 1, 1]
+# Swap LF<->RF (0<->2, 4<->6, 8<->10) and LH<->RH (1<->3, 5<->7, 9<->11)
+_JOINT_PERM = [2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9]
+# Negate HAA joints (indices 0-3), keep HFE and KFE
+_JOINT_SIGN: list[float] = [-1, -1, -1, -1, 1, 1, 1, 1, 1, 1, 1, 1]
 
 _ordering_verified = False
 
