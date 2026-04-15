@@ -22,7 +22,6 @@ from cf_lab import CF_LAB_DATA_DIR
 ##
 
 AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DelayedPDActuatorCfg(
-AYG_MOTOR_SIMPLE_ACTUATOR_CFG = DelayedPDActuatorCfg(
     joint_names_expr=[".*HAA", ".*HFE", ".*KFE"],
     effort_limit=30.0,
     velocity_limit=18.849,

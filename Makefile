@@ -1,6 +1,9 @@
 COMPOSE := docker compose -f docker/docker-compose.yaml
 
-.PHONY: up exec down
+.PHONY: build up exec down
+
+build:
+	$(COMPOSE) build
 
 up:
 	$(COMPOSE) up -d

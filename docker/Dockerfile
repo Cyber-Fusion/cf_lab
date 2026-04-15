@@ -5,3 +5,6 @@ RUN printf '#!/bin/bash\nexec /isaac-sim/python.sh "$@"\n' > /usr/local/bin/pyth
     chmod +x /usr/local/bin/python && \
     ln -sf /usr/local/bin/python /usr/local/bin/python3
 
+# Allow git to operate on the mounted workspace (owned by host user)
+RUN git config --global --add safe.directory /workspace/cf_lab
+
