@@ -574,6 +574,13 @@ def handstand_orientation_l2(
     return torch.sum(torch.square(asset.data.projected_gravity_b - target_gravity_tensor), dim=1)
 
 
+def joint_deviation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize joint positions that deviate from the default one using L2 squared kernel."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    angle = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    return torch.sum(torch.square(angle), dim=1)
+
+
 def joint_powers_l1(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize joint powers on the articulation using L1-kernel"""
 

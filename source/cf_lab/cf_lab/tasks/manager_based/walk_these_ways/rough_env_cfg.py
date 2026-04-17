@@ -38,7 +38,7 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.rewards.footswing_height.weight = -0.0
         self.rewards.foot_clearance.weight = -150.0
         
-        self.rewards.base_height_l2.weight = -100.0
+        self.rewards.base_height_l2.weight = -200.0
         self.rewards.raibert_heuristic.weight = -0.0
         self.rewards.feet_slip.weight = -0.04
         
@@ -54,6 +54,7 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.rewards.orientation_control.weight = -40.0
 
         self.rewards.joint_deviation_l1.weight = -0.0
+        self.rewards.joint_deviation_l2.weight = -0.3
         self.rewards.joint_vel_l2.weight = -1.0e-3
         self.rewards.joint_acc_l2.weight = -2.5e-7
         self.rewards.joint_torques_l2.weight = -2.0e-4

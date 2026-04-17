@@ -245,6 +245,31 @@ def foot_slip_penalty(
     return torch.sum(reward, dim=1)
 
 
+def feet_impact_vel_penalty(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, sensor_cfg: SceneEntityCfg, threshold: float
+) -> torch.Tensor:
+    """Penalize downward foot vertical velocity at ground contact.
+
+    Penalizes the squared downward (negative Z) foot velocity when the foot is in contact
+    with the ground, reducing violent foot-ground impacts. Only the downward component is
+    penalized — upward velocity (liftoff) is not affected.
+
+    Inspired by Walk These Ways (Margolis & Agrawal, CoRL 2022).
+    """
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    # check if contact force is above threshold (using history for robustness)
+    net_contact_forces = contact_sensor.data.net_forces_w_history
+    is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > threshold
+    # get foot vertical velocity and only penalize downward (negative z) component
+    foot_vel_z = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, 2]
+    downward_vel = torch.clamp(foot_vel_z, max=0.0)
+
+    reward = is_contact * torch.square(downward_vel)
+    return torch.sum(reward, dim=1)
+
+
 def joint_acceleration_penalty(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize joint accelerations on the articulation."""
     # extract the used quantities (to enable type-hinting)

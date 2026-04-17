@@ -28,6 +28,7 @@ from .ayg_params import AygParams as Params
 # Pre-defined configs
 ##
 from cf_lab.assets.ayg import AYG_CFG, AYG_MOTOR_SIMPLE_ACTUATOR_CFG  # isort: skip
+from isaaclab.assets.articulation import ArticulationCfg  # isort: skip
 
 
 COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
@@ -97,7 +98,11 @@ class AygObservationsCfg:
             clip=(-100, 100),
             noise=Unoise(n_min=-0.05, n_max=0.05),
         )
-        velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
+        velocity_commands = ObsTerm(
+            func=mdp.generated_commands,
+            params={"command_name": "base_velocity"},
+            clip=(-100, 100),
+        )
         joint_pos = ObsTerm(
             func=mdp.joint_pos_rel,
             params={"asset_cfg": SceneEntityCfg("robot")},
@@ -116,6 +121,8 @@ class AygObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
+            self.history_length = 5
+            self.flatten_history_dim = True
 
     @configclass
     class CriticCfg(ObsGroup):
@@ -146,12 +153,20 @@ class AygObservationsCfg:
             func=ayg_mdp.foot_contact_forces,
             params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names)},
         )
+        # -- domain randomization parameters
+        friction = ObsTerm(func=ayg_mdp.friction_coefficients)
+        base_mass = ObsTerm(
+            func=ayg_mdp.body_mass,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name)},
+        )
+        external_force_torque = ObsTerm(
+            func=ayg_mdp.base_external_force_torque,
+            params={"asset_cfg": SceneEntityCfg("robot", body_names=Params.base_name)},
+        )
 
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
-            # self.history_length = 5
-            # self.flatten_history_dim = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -306,6 +321,15 @@ class AygRewardsCfg:
             "threshold": 1.0,
         },
     )
+    feet_impact_vel = RewardTermCfg(
+        func=ayg_mdp.feet_impact_vel_penalty,
+        weight=-0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
+            "threshold": 1.0,
+        },
+    )
     joint_acc = RewardTermCfg(
         func=ayg_mdp.joint_acceleration_penalty,
         weight=-1.0e-4,
@@ -388,6 +412,16 @@ class AygFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         # switch robot to Ayg-d
         self.scene.robot = AYG_CFG.replace(
             prim_path="{ENV_REGEX_NS}/Robot",
+            init_state=ArticulationCfg.InitialStateCfg(
+                pos=(0.0, 0.0, 0.36),
+                joint_pos={
+                    "L._HAA": -0.1,
+                    "R._HAA": 0.1,
+                    ".*HFE": 0.0,
+                    ".*KFE": 0.0,
+                },
+                joint_vel={".*": 0.0},
+            ),
             actuators={"legs": AYG_MOTOR_SIMPLE_ACTUATOR_CFG.replace(max_delay=decimation)},
         )
 

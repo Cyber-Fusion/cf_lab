@@ -164,7 +164,7 @@ def friction_coefficients(
     # channels: (static_friction, dynamic_friction, restitution)
     materials = asset.root_physx_view.get_material_properties()
     # Average across all shapes, keep only static + dynamic friction -> (num_envs, 2)
-    return materials[:, :, :2].mean(dim=1)
+    return materials[:, :, :2].mean(dim=1).to(env.device)
 
 
 def robot_base_pose(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
