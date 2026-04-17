@@ -83,6 +83,76 @@ An **explicit survival reward** (a small positive constant each step, e.g., $+1.
 However, it compounds over long episodes and can dominate the reward signal, potentially encouraging overly conservative behavior.
 Use sparingly and consider annealing it as training progresses.
 
+### 1.5 Exp-Negative Rewards: Multiplicative Gating
+
+The standard reward paradigm (Section 1.1) sums all terms additively. A more expressive alternative is the **exp-negative** structure, where penalty terms *multiplicatively gate* the tracking rewards instead of being summed with them.
+
+This multiplicative terms have the advantage of never causing negative rewards and, thus, early termination. **Empirically**, they make reward tuning easier but convergence slower.
+
+**Total reward formula:**
+
+$$R = \underbrace{\sum_i w_i^{+} r_i^{+} \Delta t}_{\text{additive terms}} \;\cdot\; \exp\!\Bigl(\underbrace{\sum_j w_j^{-} r_j^{-} \Delta t}_{\text{exp-negative terms}} \cdot \sigma\Bigr)$$
+
+The additive terms (e.g., velocity tracking) accumulate into a positive reward as usual.
+The exp-negative terms (e.g., height error, gait violations, undesired contacts) accumulate separately into a negative sum, which is then exponentiated to produce a **multiplicative gate** in $[0, 1]$.
+
+**How the gate works:**
+
+- **Good behavior** — exp-negative penalties are small, so $\exp(\text{small negative} \cdot \sigma) \approx 1$, and the full tracking reward passes through.
+- **Bad behavior** — exp-negative penalties are large, so $\exp(\text{large negative} \cdot \sigma) \to 0$, and the tracking reward is suppressed regardless of how well the policy tracks velocity.
+
+This creates a fundamentally different optimization landscape from additive penalties:
+
+| Property | Additive penalties | Exp-negative penalties |
+|---|---|---|
+| Interaction with tracking | Independent — penalty and tracking are summed | Coupled — penalty gates how much tracking reward is received |
+| Bad-behavior signal | Negative reward (can outweigh tracking) | Tracking reward approaches zero (cannot go negative) |
+| Multi-penalty scaling | Each penalty adds independently; total penalty grows linearly | Penalties compound multiplicatively; violating *any* term suppresses the whole reward |
+| Reward range | Unbounded below | Always $\geq 0$ (bounded by the tracking reward) |
+
+**Sigma annealing.** The $\sigma$ coefficient controls how strict the gate is.
+It is typically annealed via curriculum during training:
+
+$$\sigma(t) = \sigma_{min} + (\sigma_{max} - \sigma_{min}) \cdot \min\!\left(\frac{t}{T_{anneal}},\; 1\right)^2$$
+
+- **Early training** ($\sigma$ low): the gate is weak ($\exp(\cdot) \approx 1$), so the policy focuses on learning to track velocity without being overwhelmed by secondary constraints.
+- **Late training** ($\sigma$ high): the gate becomes strict, and the policy must satisfy all exp-negative constraints to receive meaningful reward.
+
+Typical annealing: $\sigma_{min} = 1$, $\sigma_{max} = 20$, $T_{anneal} = 48000$ steps (quadratic schedule).
+
+**When to use exp-negative vs additive.**
+Exp-negative penalties are well-suited for secondary behavioral constraints (gait pattern, body height, foot placement) that should not interfere with early velocity-tracking learning but must be strictly enforced later.
+Additive penalties remain better for smooth regularization terms (torque, acceleration, action rate) where the gradient should always be present.
+
+#### Implementation
+
+The exp-negative reward structure is implemented in `cf_lab/envs/wtw_env.py` as `ExpNegativeRewardManager`, a custom `RewardManager` subclass.
+Each reward term is tagged with a `RewardType` — either `ADDITIVE` (default) or `EXP_NEGATIVE` — via the `WtwRewTerm` config class in the WTW environment config.
+The sigma annealing curriculum is in `walk_these_ways/mdp/curriculums.py:anneal_sigma_exp_neg`.
+
+#### Example: Walk-These-Ways reward budget
+
+From the WTW rough environment (`rough_env_cfg.py`):
+
+| Term | Type | Weight | Purpose |
+|------|------|--------|---------|
+| `track_lin_vel_xy_exp` | Additive | +2.0 | Primary task reward |
+| `track_ang_vel_z_exp` | Additive | +1.0 | Yaw tracking |
+| `gait` | Exp-negative | $-16.0$ | Enforce commanded gait pattern |
+| `foot_clearance` | Exp-negative | $-150.0$ | Penalize scuffing during swing |
+| `base_height_l2` | Exp-negative | $-100.0$ | Maintain target body height |
+| `undesired_contacts` | Exp-negative | $-10.0$ | Penalize thigh/shank contact |
+| `zero_vel_when_zero_command` | Exp-negative | $-10.0$ | Stand still when commanded |
+| `stand_when_zero_command` | Exp-negative | $-1.0$ | Return to default pose when stopped |
+| `feet_slip` | Exp-negative | $-0.04$ | Penalize foot sliding |
+| `orientation_control` | Exp-negative | $-40.0$ | Track commanded body pitch/roll |
+| `lin_vel_z_l2` | Additive | $-2.0$ | Suppress bouncing |
+| `action_rate_l2` | Additive | $-0.01$ | Smooth actions |
+| `joint_torques_l2` | Additive | $-2 \times 10^{-4}$ | Energy efficiency |
+
+Note: exp-negative weights are much larger in magnitude (e.g., $-150$) than typical additive penalties because the raw reward values are small and then further attenuated by the $\exp(\cdot)$ operation.
+The large weights ensure that violations produce a meaningful suppression of the gate.
+
 ---
 
 ## Part 2: Reward Catalog
@@ -95,6 +165,7 @@ Use sparingly and consider annealing it as training progresses.
 | **Custom** | `source/cf_lab/cf_lab/tasks/manager_based/velocity/mdp/rewards.py` |
 | **WTW** | `source/cf_lab/cf_lab/tasks/manager_based/walk_these_ways/mdp/rewards.py` |
 | **Direct** | `source/cf_lab/cf_lab/tasks/direct/velocity/ayg_env.py` |
+| **Exp-neg manager** | `source/cf_lab/cf_lab/envs/wtw_env.py` |
 
 ---
 
@@ -135,7 +206,7 @@ $$r = \exp\!\left(-\frac{(\omega^{cmd}_z - \omega_z)^2}{\sigma^2}\right)$$
 |-----------|-------------|---------------|
 | `std` ($\sigma$) | Tolerance radius | 0.25–2.0 |
 
-**Typical weight:** +1.0
+**Typical weight:** +0.5 to +1.0. Typically weighted exactly half of the linear velocity reward.
 
 Analogous to linear velocity tracking but for yaw rate.
 Usually weighted lower than linear velocity because precise yaw control is less critical for stable locomotion.
