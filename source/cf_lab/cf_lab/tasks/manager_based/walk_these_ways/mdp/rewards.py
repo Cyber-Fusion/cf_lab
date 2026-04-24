@@ -914,6 +914,26 @@ def zero_vel_when_zero_command(
     return (lin_vel_xy + yaw_weight * yaw_rate) * zero_cmd_mask
 
 
+def zero_ang_vel_when_zero_command(
+    env,
+    command_name: str,
+    cmd_threshold: float = 0.05,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize base angular velocity when the velocity command is zero.
+
+    Returns ``||omega||`` masked to only apply when the command L1 norm is below *cmd_threshold*.
+    Use with a negative weight.
+    """
+    cmd = env.command_manager.get_command(command_name)
+    zero_cmd_mask = cmd.norm(p=1, dim=1) <= cmd_threshold
+
+    asset: RigidObject = env.scene[asset_cfg.name]
+    ang_vel = torch.norm(asset.data.root_ang_vel_w, dim=1)
+
+    return ang_vel * zero_cmd_mask
+
+
 class RaibertHeuristicReward(ManagerTermBase):
     """Penalize deviation of foot positions from Raibert heuristic desired positions."""
 

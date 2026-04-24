@@ -30,23 +30,24 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         # ============================== Rewards ============================= #
         
         # Task
-        self.rewards.track_lin_vel_xy_exp.weight = 2.0
-        self.rewards.track_ang_vel_z_exp.weight = 1.0
+        self.rewards.track_lin_vel_xy_exp.weight = 1.5
+        self.rewards.track_ang_vel_z_exp.weight = 0.75
         
         # Secondary Tasks - Exp neg penalties
         self.rewards.gait.weight = -16.0
         self.rewards.footswing_height.weight = -0.0
         self.rewards.foot_clearance.weight = -150.0
         
-        self.rewards.base_height_l2.weight = -200.0
+        self.rewards.base_height_l2.weight = -150.0
         self.rewards.raibert_heuristic.weight = -0.0
         self.rewards.feet_slip.weight = -0.04
         
         self.rewards.undesired_contacts.weight = -10.0
         
-        self.rewards.stand_when_zero_command.weight = -1.0
-        self.rewards.stand_still_when_zero_command.weight = -0.0
+        self.rewards.stand_when_zero_command.weight = -0.2
+        self.rewards.stand_still_when_zero_command.weight = -0.1
         self.rewards.zero_vel_when_zero_command.weight = -10.0
+        self.rewards.zero_ang_vel_when_zero_command.weight = -5.0
         
         # Additive penalties
         self.rewards.lin_vel_z_l2.weight = -2.0
@@ -64,8 +65,8 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
 
         # ============================= Commands ============================= #
         
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1.5)
+        self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
         self.commands.gait_command.multi_gait = True
         self.commands.gait_command.binary_phases = True

@@ -357,15 +357,15 @@ class RewardsCfg:
 
     # ================================= Task ================================= #
     track_lin_vel_xy_exp = WtwRewTerm(
-        func=mdp.track_lin_vel_xy_exp,
+        func=ayg_mdp.base_linear_velocity_reward,
         weight=1.0,
-        params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
+        params={"std": 1.0, "ramp_rate": 0.5, "ramp_at_vel": 1.0, "asset_cfg": SceneEntityCfg("robot")},
         reward_type=RewardType.ADDITIVE,
     )
     track_ang_vel_z_exp = WtwRewTerm(
-        func=mdp.track_ang_vel_z_exp,
+        func=ayg_mdp.base_angular_velocity_reward,
         weight=0.5,
-        params={"command_name": "base_velocity", "std": math.sqrt(0.25)},
+        params={"std": 2.0, "asset_cfg": SceneEntityCfg("robot")},
         reward_type=RewardType.ADDITIVE,
     )
     
@@ -480,6 +480,13 @@ class RewardsCfg:
 
     zero_vel_when_zero_command = WtwRewTerm(
         func=mdp.zero_vel_when_zero_command,
+        weight=0.0,
+        params={"command_name": "base_velocity"},
+        reward_type=RewardType.EXP_NEGATIVE,
+    )
+
+    zero_ang_vel_when_zero_command = WtwRewTerm(
+        func=mdp.zero_ang_vel_when_zero_command,
         weight=0.0,
         params={"command_name": "base_velocity"},
         reward_type=RewardType.EXP_NEGATIVE,
