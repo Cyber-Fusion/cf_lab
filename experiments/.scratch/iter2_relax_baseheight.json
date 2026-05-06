@@ -1,0 +1,5 @@
+{
+  "agent.max_iterations": 400,
+  "agent.experiment_name": "ayg_rough_autotrain",
+  "rewards.base_height_l2.weight": -1.0
+}
