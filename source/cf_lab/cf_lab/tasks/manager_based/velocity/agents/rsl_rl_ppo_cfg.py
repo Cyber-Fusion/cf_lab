@@ -11,7 +11,7 @@ from isaaclab.utils import configclass
 @configclass
 class AygRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 1500
+    max_iterations = 6000
     save_interval = 50
     experiment_name = "ayg_rough"
     empirical_normalization = False
