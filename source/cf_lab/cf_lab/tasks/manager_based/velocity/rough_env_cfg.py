@@ -107,12 +107,12 @@ class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.feet_air_time.weight = 0.125
         self.rewards.feet_air_time.params["threshold"] = 0.4
         self.rewards.undesired_contacts.weight = -1.0
-        self.rewards.flat_orientation_l2.weight = -0.0
+        self.rewards.flat_orientation_l2.weight = -2.5
         self.rewards.dof_pos_limits.weight = -0.01
         self.rewards.base_height_l2.weight = 0.0
         self.rewards.base_height_l2.params["asset_cfg"].body_names = "Base"
         self.rewards.joint_deviation_l1.weight = -0.0
-        self.rewards.feet_regulation.weight = -0.05
+        self.rewards.feet_regulation.weight = 0.0
         self.rewards.feet_regulation.params["asset_cfg"].body_names = ".*_Foot"
         self.rewards.feet_regulation.params["desired_body_height"] = 0.35
         self.rewards.foot_clearance.weight = 0.25
