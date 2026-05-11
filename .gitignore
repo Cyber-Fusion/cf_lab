@@ -84,4 +84,4 @@ uv.lock
 .vscode/browse.vc.db-wal
 
 # Claude Code local settings (personal, not shared)
-.claude/settings.local.json
+.claude/settings.local.jsonexperiments/
