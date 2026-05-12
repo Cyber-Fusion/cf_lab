@@ -54,6 +54,12 @@ class AygRewardsCfg(RewardsCfg):
         },
     )
 
+    flight_phase = RewTerm(
+        func=ayg_mdp.flight_phase_penalty,
+        weight=0.0,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Foot")},
+    )
+
 
 @configclass
 class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
@@ -120,6 +126,7 @@ class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.foot_clearance.params["asset_cfg"].body_names = ".*_Foot"
         self.rewards.foot_clearance.params["sensor_cfg"].body_names = ".*_Foot"
         self.rewards.foot_clearance.params["sigma"] = 0.01
+        self.rewards.flight_phase.weight = -1.0
 
         # Commands
         self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)

@@ -333,3 +333,15 @@ def feet_regulation(
     r_fr = torch.sum(vel_norms_xy**2 * exp_term, dim=-1)
 
     return r_fr
+
+
+def flight_phase_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize moments where all feet are simultaneously airborne (aerial / jumping gait)."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    current_air_time = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids]
+    is_in_swing = current_air_time > 0.0
+    all_airborne = is_in_swing.all(dim=1)
+    return all_airborne.float()
