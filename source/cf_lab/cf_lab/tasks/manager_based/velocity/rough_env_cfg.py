@@ -71,12 +71,13 @@ class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # Switch robot to ayg and rename stuff
         self.scene.robot = AYG_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-        # Disable base mass / COM / external-force randomization until the policy is tuned;
-        # re-enable once tracking is solid to harden sim-to-real.
-        self.events.add_base_mass = None
-        self.events.base_com = None
-        self.events.base_external_force_torque = None
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/Base"
+        # Randomization body name overrides (parent uses lowercase "base", AYG body is "Base")
+        # and AYG-appropriate mass range (~10 kg robot, ±1.5 kg ≈ 15%).
+        self.events.add_base_mass.params["asset_cfg"].body_names = "Base"
+        self.events.add_base_mass.params["mass_distribution_params"] = (-1.5, 1.5)
+        self.events.base_com.params["asset_cfg"].body_names = "Base"
+        self.events.base_external_force_torque.params["asset_cfg"].body_names = "Base"
         # Rename the joints in the rewards
         self.rewards.feet_air_time.params["sensor_cfg"].body_names = ".*_Foot"
         self.rewards.undesired_contacts.params["sensor_cfg"].body_names = [".*_Shank", ".*_Thigh"]
@@ -103,7 +104,7 @@ class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         }
 
         # rewards
-        self.rewards.track_lin_vel_xy_exp.weight = 3.0
+        self.rewards.track_lin_vel_xy_exp.weight = 3.5
         self.rewards.track_ang_vel_z_exp.weight = 2.0
         self.rewards.lin_vel_z_l2.weight = -0.5
         self.rewards.ang_vel_xy_l2.weight = -0.05
