@@ -46,6 +46,9 @@ class GaitCommandQuad(CommandTerm):
         self.dt = env.step_dt
         # move canonical gaits to device
         self._canonical_gaits = self.CANONICAL_GAITS.to(self.device)
+        # Per-env current canonical-gait id in [0..3] (0=trot, 1=pace, 2=bound, 3=pronk).
+        # Stays at 0 (trot slot) when multi_gait=False so downstream consumers can index uniformly.
+        self.current_gait_ids = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         # create metrics dictionary for logging
         self.metrics = {}
 
@@ -80,6 +83,7 @@ class GaitCommandQuad(CommandTerm):
         n = len(env_ids)
         # assign each env to one of 4 gait categories uniformly
         gait_idx = torch.randint(0, 4, (n,), device=self.device)
+        self.current_gait_ids[env_ids] = gait_idx
         offsets = self._canonical_gaits[gait_idx]  # (n, 3)
         # optionally add jitter around canonical values
         if not self.cfg.binary_phases:

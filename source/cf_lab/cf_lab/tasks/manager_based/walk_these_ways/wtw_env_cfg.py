@@ -168,11 +168,6 @@ class ObservationsCfg:
             clip=(-100, 100),
             noise=Unoise(n_min=-0.05, n_max=0.05),
         )
-        velocity_commands = ObsTerm(
-            func=mdp.generated_commands,
-            params={"command_name": "base_velocity"},
-            clip=(-100, 100),
-        )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
         clock_inputs = ObsTerm(func=mdp.get_clock_inputs)
         gait_command = ObsTerm(func=mdp.get_gait_command, params={"command_name": "gait_command"})
@@ -368,7 +363,7 @@ class RewardsCfg:
         params={"std": 2.0, "asset_cfg": SceneEntityCfg("robot")},
         reward_type=RewardType.ADDITIVE,
     )
-    
+
     # =========================== Exp Neg Penalties ========================== #
     gait = WtwRewTerm(
         func=mdp.GaitRewardQuad,
@@ -403,7 +398,7 @@ class RewardsCfg:
         },
         reward_type=RewardType.EXP_NEGATIVE,
     )
-    
+
     foot_clearance = WtwRewTerm(
         func=mdp.FootClearanceCmdLinearQuad,
         weight=-0.0,
@@ -421,7 +416,7 @@ class RewardsCfg:
         },
         reward_type=RewardType.EXP_NEGATIVE,
     )
-    
+
     base_height_l2 = WtwRewTerm(
         func=mdp.base_height_l2,
         weight=-0.0,
@@ -431,7 +426,7 @@ class RewardsCfg:
         },
         reward_type=RewardType.EXP_NEGATIVE,
     )
-    
+
     raibert_heuristic = WtwRewTerm(
         func=mdp.RaibertHeuristicReward,
         weight=0.0,
@@ -453,7 +448,7 @@ class RewardsCfg:
         },
         reward_type=RewardType.EXP_NEGATIVE,
     )
-    
+
     undesired_contacts = WtwRewTerm(
         func=mdp.undesired_contacts,
         weight=-1.0,
@@ -502,9 +497,9 @@ class RewardsCfg:
     joint_vel_l2 = WtwRewTerm(func=mdp.joint_vel_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
     joint_acc_l2 = WtwRewTerm(func=mdp.joint_acc_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
     joint_torques_l2 = WtwRewTerm(func=mdp.joint_torques_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
-    
+
     dof_pos_limits = WtwRewTerm(func=mdp.joint_pos_limits, weight=0.0, reward_type=RewardType.ADDITIVE)
-    
+
     action_rate_l2 = WtwRewTerm(func=mdp.action_rate_l2, weight=-0.0, reward_type=RewardType.ADDITIVE)
     action_smoothness_l2 = WtwRewTerm(
         func=mdp.ActionSmoothnessPenalty,

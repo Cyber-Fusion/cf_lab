@@ -70,3 +70,47 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygCobblestoneWTWPPORunnerCfg",
     },
 )
+
+##
+# v1: additive rewards. Uses standard ManagerBasedRLEnv (no ExpNegativeRewardManager).
+##
+
+gym.register(
+    id="Isaac-WTW-Flat-Ayg-v1",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.v1_env_cfg:AygFlatWTWEnvCfgV1",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygFlatWTWPPORunnerCfgV1",
+    },
+)
+
+gym.register(
+    id="Isaac-WTW-Flat-Ayg-Play-v1",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.v1_env_cfg:AygFlatWTWEnvCfgV1_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygFlatWTWPPORunnerCfgV1",
+    },
+)
+
+gym.register(
+    id="Isaac-WTW-Rough-Ayg-v1",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.v1_env_cfg:AygRoughWTWEnvCfgV1",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygRoughWTWPPORunnerCfgV1",
+    },
+)
+
+gym.register(
+    id="Isaac-WTW-Rough-Ayg-Play-v1",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.v1_env_cfg:AygRoughWTWEnvCfgV1_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygRoughWTWPPORunnerCfgV1",
+    },
+)

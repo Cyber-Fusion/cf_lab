@@ -24,6 +24,12 @@ if TYPE_CHECKING:
     from isaaclab.managers import RewardTermCfg
 
 
+def _zero_cmd_mask(env: ManagerBasedRLEnv, cmd_threshold: float = 0.05) -> torch.Tensor:
+    """Per-env boolean mask, True when the velocity command is ~zero (regardless of body velocity)."""
+    cmd = env.command_manager.get_command("base_velocity")
+    return cmd.norm(p=1, dim=1) <= cmd_threshold
+
+
 def _locomotion_gate(env: ManagerBasedRLEnv, cmd_threshold: float = 0.05, vel_threshold: float = 0.3) -> torch.Tensor:
     """Return a per-env boolean mask that is True when the robot should be locomoting.
 
@@ -124,7 +130,16 @@ class GaitRewardQuad(ManagerTermBase):
         self.vel_sigma = cfg.params["gait_vel_sigma"]
         self.kappa_gait_probs = cfg.params["kappa_gait_probs"]
         self.command_name = cfg.params["command_name"]
+        # Only consumed by GaitRewardQuad.__call__. Subclasses (FootSwingHeightQuad,
+        # FootClearanceCmdLinearQuad) override __call__ and don't use this, so it
+        # defaults to 0.0 when omitted from cfg.params.
+        self.gait_full_magnitude = float(cfg.params.get("gait_full_magnitude", 0.0))
         self.dt = env.step_dt
+
+        # Per-gait curriculum progress in [0, 1], written by per_gait_progress_curriculum.
+        # Index order matches GaitCommandQuad.CANONICAL_GAITS: [trot, pace, bound, pronk].
+        # Per-env reward scale = gait_full_magnitude * per_gait_progress[current_gait_id].
+        self.per_gait_progress = torch.zeros(4, device=env.device, dtype=torch.float32)
 
     def __call__(
         self,
@@ -137,6 +152,7 @@ class GaitRewardQuad(ManagerTermBase):
         command_name,
         sensor_cfg,
         asset_cfg,
+        gait_full_magnitude: float = 0.0,
     ) -> torch.Tensor:
         """Compute the reward.
 
@@ -166,7 +182,16 @@ class GaitRewardQuad(ManagerTermBase):
         # Combine rewards
         total_reward = -(force_reward + velocity_reward)
 
-        return total_reward * _locomotion_gate(env)
+        # Backward-compat path: v0 cfgs don't pass `gait_full_magnitude`, so it defaults to 0.0
+        # and we skip the per-env curriculum scale entirely (v0 weights are absolute).
+        if self.gait_full_magnitude == 0.0:
+            return total_reward * _locomotion_gate(env)
+
+        # Per-env scale = full gait magnitude * curriculum progress for this env's active gait.
+        command_term = env.command_manager.get_term(self.command_name)
+        per_env_scale = self.gait_full_magnitude * self.per_gait_progress[command_term.current_gait_ids]
+
+        return total_reward * _locomotion_gate(env) * per_env_scale
 
     def compute_contact_targets(self, gait_params):
         """Calculate desired contact states for the current timestep."""
@@ -890,6 +915,30 @@ def stand_still_when_zero_command(
     joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
 
     return torch.norm(joint_vel, p=1, dim=1) * ~_locomotion_gate(env)
+
+
+def stand_when_zero_cmd_only(
+    env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Penalize joint positions when commanded velocity is ~zero (regardless of body velocity).
+
+    Looser variant of :func:`stand_when_zero_command` used by v1 additive cfgs.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    diff_angle = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    return torch.norm(diff_angle, p=1, dim=1) * _zero_cmd_mask(env)
+
+
+def stand_still_when_zero_cmd_only(
+    env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Penalize joint velocities when commanded velocity is ~zero (regardless of body velocity).
+
+    Looser variant of :func:`stand_still_when_zero_command` used by v1 additive cfgs.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
+    return torch.norm(joint_vel, p=1, dim=1) * _zero_cmd_mask(env)
 
 
 def zero_vel_when_zero_command(

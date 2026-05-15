@@ -54,3 +54,19 @@ class AygCobblestoneWTWPPORunnerCfg(AygRoughWTWPPORunnerCfg):
         super().__post_init__()
 
         self.experiment_name = "ayg_wtw_cobblestone"
+
+
+@configclass
+class AygRoughWTWPPORunnerCfgV1(AygRoughWTWPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.experiment_name = "ayg_wtw_rough_v1"
+
+
+@configclass
+class AygFlatWTWPPORunnerCfgV1(AygFlatWTWPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.experiment_name = "ayg_wtw_flat_v1"
