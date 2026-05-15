@@ -28,3 +28,6 @@ _isaac_sim?
 docker/.isaac-lab-docker-history
 # ignore uv environment
 env_isaaclab
+
+# IsaacLab submodule is bind-mounted at runtime, not copied at build — exclude entirely
+IsaacLab/

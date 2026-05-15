@@ -16,6 +16,7 @@ services:
     working_dir: /workspace/cf_lab
     volumes:
       - ..:/workspace/cf_lab:rw
+      - ../IsaacLab:/workspace/isaaclab:rw
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-${HOME}/.Xauthority}:/root/.Xauthority
       - ${HOME}/docker/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw

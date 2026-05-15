@@ -2,3 +2,6 @@
 	path = source/cf_lab/data/Robots/ayg_description
 	url = https://github.com/Cyber-Fusion/ayg_description.git
 	branch = main
+[submodule "IsaacLab"]
+	path = IsaacLab
+	url = https://github.com/isaac-sim/IsaacLab.git

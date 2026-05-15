@@ -4,6 +4,19 @@
 
 CF Lab is an Isaac Lab extension for RL-based locomotion control of the AYG quadruped robot.
 
+## Cloning
+
+This repo uses git submodules (notably `IsaacLab/`, pinned to v2.3.2). After cloning, run:
+
+```shell
+git submodule update --init --recursive
+```
+
+`docker-compose` bind-mounts the host's `IsaacLab/` over `/workspace/isaaclab` at
+runtime, overriding the base image's bundled copy so host and container see the same
+Isaac Lab source. (Running the image without this mount falls back to the base image's
+v2.3.2 copy.)
+
 ## Installation
 
 ### Isaac Lab

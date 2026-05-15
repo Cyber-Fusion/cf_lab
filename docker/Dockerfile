@@ -6,5 +6,7 @@ RUN printf '#!/bin/bash\nexec /isaac-sim/python.sh "$@"\n' > /usr/local/bin/pyth
     ln -sf /usr/local/bin/python /usr/local/bin/python3
 
 # Allow git to operate on the mounted workspace (owned by host user)
-RUN git config --global --add safe.directory /workspace/cf_lab
+RUN git config --global --add safe.directory /workspace/cf_lab && \
+    git config --global --add safe.directory /workspace/isaaclab
 
+RUN curl -fsSL https://claude.ai/install.sh | bash
