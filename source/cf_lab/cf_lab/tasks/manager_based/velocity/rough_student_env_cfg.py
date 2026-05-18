@@ -65,13 +65,21 @@ class StudentObservationsCfg(ObservationsCfg):
 def _apply_student_overlay(cfg) -> None:
     # D555 depth sensor. Spawned as a child sub-prim of the URDF link
     # (parent prim already exists after URDF import; spawning at the link path
-    # itself would raise "A prim already exists"). Zero offset inherits the
-    # link's pose, which is the ROS optical convention baked into the URDF.
+    # itself would raise "A prim already exists").
+    #
+    # The OffsetCfg is interpreted in ROS body convention (X forward, Y left,
+    # Z up) per `convention="ros"`. A 30 deg "pitch-down" — the camera optical
+    # axis tilting toward the ground — is a +30 deg rotation about the +Y axis
+    # (right-hand rule: +X rotates toward -Z, i.e., forward goes down).
+    #
+    # Quaternion (w, x, y, z) for +30 deg about Y: (cos(15), 0, sin(15), 0).
+    # If a visual check shows the camera looking *up* instead, flip the sign
+    # of the y component to (cos(15), 0, -sin(15), 0).
     cfg.scene.depth_camera = TiledCameraCfg(
         prim_path="{ENV_REGEX_NS}/Robot/Camera_depth_optical_frame/depth_sensor",
         offset=TiledCameraCfg.OffsetCfg(
             pos=(0.0, 0.0, 0.0),
-            rot=(1.0, 0.0, 0.0, 0.0),
+            rot=(0.9659258262890683, 0.0, 0.25881904510252074, 0.0),
             convention="ros",
         ),
         data_types=["distance_to_image_plane"],
