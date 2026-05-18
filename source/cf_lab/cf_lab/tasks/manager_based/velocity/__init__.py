@@ -106,3 +106,23 @@ gym.register(
         ),
     },
 )
+
+gym.register(
+    id="Isaac-Velocity-Rough-Ayg-Student-Blind-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.rough_student_blind_env_cfg:AygRoughStudentBlindEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygRoughStudentPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Isaac-Velocity-Rough-Ayg-Student-Blind-Play-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.rough_student_blind_env_cfg:AygRoughStudentBlindEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygRoughStudentPPORunnerCfg",
+    },
+)
