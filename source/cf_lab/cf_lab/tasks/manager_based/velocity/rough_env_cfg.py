@@ -3,13 +3,20 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
+from isaaclab.managers import ObservationGroupCfg as ObsGroup
+from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.sensors import RayCasterCameraCfg, patterns
 from isaaclab.utils import configclass
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import isaaclab.envs.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
     LocomotionVelocityRoughEnvCfg,
+    MySceneCfg,
+    ObservationsCfg,
     RewardsCfg,
 )
 
@@ -19,6 +26,130 @@ from . import mdp as ayg_mdp
 # Pre-defined configs
 ##
 from cf_lab.assets.ayg import AYG_CFG  # isort: skip
+
+
+##
+# Scene with an added forward-facing depth raycaster (used by the distillation student)
+##
+
+
+@configclass
+class AygSceneCfg(MySceneCfg):
+    """Scene config that augments the upstream rough scene with a sparse forward depth camera."""
+
+    # ROS-convention rotation that aligns the camera optical axis (+Z) with the robot's forward (+X).
+    # Quaternion in (w, x, y, z): rotates camera frame {X=right, Y=down, Z=forward} into
+    # robot/base frame {X=forward, Y=left, Z=up}.
+    front_depth_camera = RayCasterCameraCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/Base",
+        mesh_prim_paths=["/World/ground"],
+        offset=RayCasterCameraCfg.OffsetCfg(
+            pos=(0.3, 0.0, 0.05),
+            rot=(0.5, -0.5, 0.5, -0.5),
+            convention="ros",
+        ),
+        data_types=["distance_to_image_plane"],
+        depth_clipping_behavior="max",
+        max_distance=5.0,
+        debug_vis=False,
+        pattern_cfg=patterns.PinholeCameraPatternCfg(
+            focal_length=24.0,
+            horizontal_aperture=20.955,
+            width=8,
+            height=6,
+        ),
+    )
+
+
+##
+# Observations: keep the original 8-term `policy` (= teacher input) and add a `student` group
+# with proprio (no base_lin_vel) + a noisy sparse forward depth point cloud.
+##
+
+
+@configclass
+class AygObservationsCfg(ObservationsCfg):
+    """Observations with both the original teacher policy group and a new student group."""
+
+    @configclass
+    class PolicyCfg(ObsGroup):
+        """Teacher input — reproduces the scaling/clipping/noise the loaded PPO
+        checkpoint was trained with (see
+        ``logs/rsl_rl/ayg_rough/2026-04-24_23-34-06/params/env.yaml``). The upstream
+        ``LocomotionVelocityRoughEnvCfg`` dropped these scales/clips in a later
+        IsaacLab version, so without this override the frozen teacher would see
+        ``base_ang_vel`` 5x and ``joint_vel`` 20x larger than at training time.
+        """
+
+        base_lin_vel = ObsTerm(
+            func=mdp.base_lin_vel,
+            noise=Unoise(n_min=-0.1, n_max=0.1),
+            clip=(-100.0, 100.0),
+        )
+        base_ang_vel = ObsTerm(
+            func=mdp.base_ang_vel,
+            scale=0.2,
+            noise=Unoise(n_min=-0.2, n_max=0.2),
+            clip=(-100.0, 100.0),
+        )
+        projected_gravity = ObsTerm(
+            func=mdp.projected_gravity,
+            noise=Unoise(n_min=-0.05, n_max=0.05),
+            clip=(-100.0, 100.0),
+        )
+        velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
+        joint_pos = ObsTerm(
+            func=mdp.joint_pos_rel,
+            noise=Unoise(n_min=-0.05, n_max=0.05),
+            clip=(-100.0, 100.0),
+        )
+        joint_vel = ObsTerm(
+            func=mdp.joint_vel_rel,
+            scale=0.05,
+            noise=Unoise(n_min=-0.5, n_max=0.5),
+            clip=(-100.0, 100.0),
+        )
+        actions = ObsTerm(func=mdp.last_action, clip=(-100.0, 100.0))
+        height_scan = ObsTerm(
+            func=mdp.height_scan,
+            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+            noise=Unoise(n_min=-0.1, n_max=0.1),
+            clip=(-1.0, 1.0),
+        )
+
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
+    @configclass
+    class StudentCfg(ObsGroup):
+        """Proprioception (without base_lin_vel) + sparse forward depth point cloud."""
+
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
+        projected_gravity = ObsTerm(
+            func=mdp.projected_gravity,
+            noise=Unoise(n_min=-0.05, n_max=0.05),
+        )
+        velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
+        joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
+        actions = ObsTerm(func=mdp.last_action)
+        front_depth_pointcloud = ObsTerm(
+            func=ayg_mdp.front_depth_pointcloud,
+            params={
+                "sensor_cfg": SceneEntityCfg("front_depth_camera"),
+                "min_range": 0.2,
+                "max_range": 5.0,
+                "noise_std": 0.02,
+            },
+        )
+
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
+    policy: PolicyCfg = PolicyCfg()
+    student: StudentCfg = StudentCfg()
 
 
 @configclass
@@ -63,6 +194,8 @@ class AygRewardsCfg(RewardsCfg):
 
 @configclass
 class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
+    scene: AygSceneCfg = AygSceneCfg(num_envs=4096, env_spacing=2.5)
+    observations: AygObservationsCfg = AygObservationsCfg()
     rewards: AygRewardsCfg = AygRewardsCfg()
 
     def __post_init__(self):
@@ -72,6 +205,8 @@ class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # Switch robot to ayg and rename stuff
         self.scene.robot = AYG_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/Base"
+        # Tick the depth raycaster at the same rate as the existing height_scanner.
+        self.scene.front_depth_camera.update_period = self.decimation * self.sim.dt
         # Randomization body name overrides (parent uses lowercase "base", AYG body is "Base")
         # and AYG-appropriate mass range (~10 kg robot, ±1.5 kg ≈ 15%).
         self.events.add_base_mass.params["asset_cfg"].body_names = "Base"
@@ -153,6 +288,50 @@ class AygRoughEnvCfg_PLAY(AygRoughEnvCfg):
 
         # disable randomization for play
         self.observations.policy.enable_corruption = False
+        self.observations.student.enable_corruption = False
         # remove random pushing event
+        self.events.base_external_force_torque = None
+        self.events.push_robot = None
+
+
+@configclass
+class AygRoughDualCurrEnvCfg(AygRoughEnvCfg):
+    """Rough variant that splits envs 50/50 into a forward and a non-forward pool.
+
+    Both pools use the stock terrain_levels_vel curriculum; per-pool mean levels are
+    logged separately so the two skill curves are visible in TensorBoard.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        base_cmd = self.commands.base_velocity
+        self.commands.base_velocity = ayg_mdp.DualPoolUniformVelocityCommandCfg(
+            asset_name=base_cmd.asset_name,
+            resampling_time_range=base_cmd.resampling_time_range,
+            rel_standing_envs=base_cmd.rel_standing_envs,
+            rel_heading_envs=base_cmd.rel_heading_envs,
+            heading_command=base_cmd.heading_command,
+            heading_control_stiffness=base_cmd.heading_control_stiffness,
+            debug_vis=base_cmd.debug_vis,
+            ranges=base_cmd.ranges,
+            forward_env_fraction=0.5,
+        )
+        self.curriculum.terrain_levels_fwd = CurrTerm(func=ayg_mdp.terrain_levels_fwd_pool_mean)
+        self.curriculum.terrain_levels_nonfwd = CurrTerm(func=ayg_mdp.terrain_levels_nonfwd_pool_mean)
+
+
+@configclass
+class AygRoughDualCurrEnvCfg_PLAY(AygRoughDualCurrEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 50
+        self.scene.env_spacing = 2.5
+        self.scene.terrain.max_init_terrain_level = None
+        if self.scene.terrain.terrain_generator is not None:
+            self.scene.terrain.terrain_generator.num_rows = 5
+            self.scene.terrain.terrain_generator.num_cols = 5
+            self.scene.terrain.terrain_generator.curriculum = False
+        self.observations.policy.enable_corruption = False
+        self.observations.student.enable_corruption = False
         self.events.base_external_force_torque = None
         self.events.push_robot = None

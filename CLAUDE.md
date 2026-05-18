@@ -113,6 +113,18 @@ Templates: `tasks/manager_based/velocity/` (full example with flat/rough/spot-in
 
 Template: `tasks/direct/ayg/` (flat + rough variants).
 
+### Distillation Policy
+
+A student-teacher distillation pipeline is wired into the rough velocity task (`Isaac-Velocity-Rough-Ayg-v0` / `-Play-v0`).
+
+- **Teacher**: a previously trained PPO checkpoint (same `experiment_name="ayg_rough"`). Its inputs are the original `policy` observation group — privileged proprio + `base_lin_vel` + `height_scan`.
+- **Student**: proprio only (no `base_lin_vel`, no `height_scan`), optionally augmented with a sparse forward depth point cloud from a `RayCasterCameraCfg` (`front_depth_camera`) attached to the robot's base. Defined as the `student` group in `AygObservationsCfg`.
+- **Routing** (in `AygRoughDistillationRunnerCfg`): `obs_groups = {"policy": ["student"], "teacher": ["policy"]}` — the env's `student` group feeds the student network, and the original `policy` group (teacher inputs) feeds the teacher network.
+- **Config**: `tasks/manager_based/velocity/agents/rsl_rl_distillation_cfg.py` defines `AygRoughDistillationRunnerCfg` (subclass of `RslRlDistillationRunnerCfg`) using `RslRlDistillationStudentTeacherCfg` + `RslRlDistillationAlgorithmCfg`. Registered as `rsl_rl_distillation_cfg_entry_point` in the task's `__init__.py`.
+- **Training**: pass `--agent=rsl_rl_distillation_cfg_entry_point` plus `--load_run <timestamp> --checkpoint <model_*.pt>` to load the teacher. `scripts/rsl_rl/train.py` detects `algorithm.class_name == "Distillation"` and uses `DistillationRunner` instead of `OnPolicyRunner`, auto-loading the checkpoint as the teacher.
+
+When adding distillation to another task: (1) extend the env's `ObservationsCfg` with a `student: ObsGroup` defining the deployable observations; (2) add any sensors the student needs to the scene cfg; (3) create `rsl_rl_distillation_cfg.py` mirroring `AygRoughDistillationRunnerCfg` (matching `experiment_name` to the teacher's PPO run); (4) register `rsl_rl_distillation_cfg_entry_point` in the gym kwargs.
+
 ## Code Style
 
 - License header required on all `.py` and `.yaml` files (enforced by pre-commit)
