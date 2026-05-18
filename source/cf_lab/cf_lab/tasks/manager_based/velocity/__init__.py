@@ -113,7 +113,6 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.rough_student_blind_env_cfg:AygRoughStudentBlindEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygRoughStudentPPORunnerCfg",
         "rsl_rl_distillation_cfg_entry_point": (
             f"{agents.__name__}.rsl_rl_distillation_cfg:AygRoughStudentBlindDistillationCfg"
         ),
@@ -126,7 +125,6 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.rough_student_blind_env_cfg:AygRoughStudentBlindEnvCfg_PLAY",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygRoughStudentPPORunnerCfg",
         "rsl_rl_distillation_cfg_entry_point": (
             f"{agents.__name__}.rsl_rl_distillation_cfg:AygRoughStudentBlindDistillationCfg"
         ),
