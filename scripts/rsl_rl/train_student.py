@@ -3,10 +3,17 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""DAgger distillation: student (ego + 4-frame depth) imitates the locked Phase 1 teacher.
+"""DAgger distillation with beta-scheduling: student (ego + depth stack) imitates the
+locked Phase 1 teacher.
 
 Issue #16 Phase 2. Standalone trainer — bypasses RSL-RL's runner because the env emits a
 Dict policy obs that RSL-RL's ActorCritic doesn't natively consume.
+
+Each rollout step, per-env, the action is the teacher's mean with probability beta and the
+student's mean (+ exploration noise) with probability (1 - beta). Beta linearly anneals from
+--beta_start to --beta_end over --beta_anneal_iters iterations, then stays at beta_end. This
+keeps early rollouts in the teacher's training distribution (so teacher labels are valid)
+and hands control over to the student as it becomes competent.
 
 Usage (local smoke test, 1 env, 0 iterations — just verifies boot path):
     python scripts/rsl_rl/train_student.py \
@@ -40,6 +47,26 @@ parser.add_argument(
     "--blind",
     action="store_true",
     help="Train the proprio-only baseline: no depth encoder, no depth obs term required.",
+)
+parser.add_argument(
+    "--beta_start",
+    type=float,
+    default=1.0,
+    help="Initial probability of using the TEACHER action during rollout (DAgger beta). "
+    "1.0 = pure expert rollout at start (in-distribution data).",
+)
+parser.add_argument(
+    "--beta_end",
+    type=float,
+    default=0.0,
+    help="Final probability of using the teacher action. 0.0 = pure student rollout at end.",
+)
+parser.add_argument(
+    "--beta_anneal_iters",
+    type=int,
+    default=200,
+    help="Number of iterations to linearly anneal beta from --beta_start to --beta_end. "
+    "After this many iterations beta is clamped to --beta_end.",
 )
 parser.add_argument("--save_interval", type=int, default=50)
 parser.add_argument("--seed", type=int, default=0)
@@ -160,7 +187,16 @@ def main() -> None:
 
     global_step = 0
     start_time = time.time()
+
+    def _beta_for_iter(i: int) -> float:
+        anneal = max(1, args_cli.beta_anneal_iters)
+        if i >= anneal:
+            return args_cli.beta_end
+        frac = i / anneal
+        return args_cli.beta_start + (args_cli.beta_end - args_cli.beta_start) * frac
+
     for it in range(args_cli.max_iterations):
+        beta = _beta_for_iter(it)
         # ----- Rollout (DAgger): student drives the env, teacher labels each step. -----
         ego_buf = torch.zeros((args_cli.steps_per_env, num_envs, ego_dim), device=device)
         if not args_cli.blind:
@@ -181,12 +217,22 @@ def main() -> None:
                 buf = stack_depth(buf, depth_frame)
 
             with torch.no_grad():
+                target = teacher(teacher_obs)
                 action_mean = student(ego, buf) if not args_cli.blind else student(ego)
                 if args_cli.exploration_std > 0.0:
-                    action = action_mean + args_cli.exploration_std * torch.randn_like(action_mean)
+                    student_action = action_mean + args_cli.exploration_std * torch.randn_like(action_mean)
                 else:
-                    action = action_mean
-                target = teacher(teacher_obs)
+                    student_action = action_mean
+                # DAgger beta-mixing: per-env coin flip — use teacher with probability beta,
+                # else use student. Keeps early rollouts in the teacher's training distribution
+                # while the student is still random, then hands control over as beta -> 0.
+                if beta >= 1.0:
+                    action = target
+                elif beta <= 0.0:
+                    action = student_action
+                else:
+                    use_teacher = (torch.rand(num_envs, 1, device=device) < beta).to(target.dtype)
+                    action = use_teacher * target + (1.0 - use_teacher) * student_action
 
             ego_buf[t] = ego
             if not args_cli.blind:
@@ -246,6 +292,7 @@ def main() -> None:
         writer.add_scalar("loss/grad_norm", float(grad_norm), it)
         writer.add_scalar("rollout/steps", global_step, it)
         writer.add_scalar("rollout/elapsed_s", time.time() - start_time, it)
+        writer.add_scalar("rollout/beta", beta, it)
         for d in range(ACTION_DIM):
             writer.add_scalar(f"loss/per_dim/{d:02d}", float(per_dim[d].item()), it)
         if (it + 1) % 10 == 0 or it == 0:
@@ -264,6 +311,11 @@ def main() -> None:
                     "depth_shape": None if args_cli.blind else (depth_h, depth_w),
                     "num_frames": 0 if args_cli.blind else args_cli.num_frames,
                     "use_depth": not args_cli.blind,
+                    "beta_schedule": {
+                        "start": args_cli.beta_start,
+                        "end": args_cli.beta_end,
+                        "anneal_iters": args_cli.beta_anneal_iters,
+                    },
                 },
                 ckpt_path,
             )
