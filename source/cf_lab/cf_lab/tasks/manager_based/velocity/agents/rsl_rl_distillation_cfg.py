@@ -16,6 +16,13 @@ Importing this module also imports ``cf_lab.learning`` which has the side
 effect of registering ``StudentTeacherVision`` in
 ``rsl_rl.runners.distillation_runner``'s namespace so the runner's
 ``eval(class_name)`` lookup resolves it.
+
+Two student variants live side-by-side here:
+
+- ``AygRoughStudentVisionDistillationCfg`` — D555 depth + 10-frame stack +
+  CNN encoder. Currently the active student.
+- ``AygRoughStudentBlindDistillationCfg`` — proprio-only baseline kept for
+  ablation studies. Pure MLP, no depth.
 """
 
 from isaaclab.utils import configclass
@@ -79,6 +86,36 @@ class AygRoughStudentVisionDistillationCfg(RslRlDistillationRunnerCfg):
         # student_hidden_dims is required by the parent cfg but the
         # VisionStudentNet ignores it (we use head_hidden_dims for the fused MLP head).
         student_hidden_dims=[256, 256, 256],
+        activation="elu",
+    )
+    algorithm = RslRlDistillationAlgorithmCfg(
+        num_learning_epochs=5,
+        learning_rate=1.0e-3,
+        gradient_length=15,
+        loss_type="mse",
+        optimizer="adam",
+    )
+
+
+@configclass
+class AygRoughStudentBlindDistillationCfg(RslRlDistillationRunnerCfg):
+    """Distillation runner for the proprio-only blind student (ablation baseline)."""
+
+    num_steps_per_env = 24
+    max_iterations = 1000
+    save_interval = 50
+    experiment_name = "ayg_rough"
+    # student net consumes env.observations.policy (45-dim ego only), teacher net
+    # consumes env.observations.teacher (235-dim ego + height_scan).
+    obs_groups = {"policy": ["policy"], "teacher": ["teacher"]}
+    policy = RslRlDistillationStudentTeacherCfg(
+        init_noise_std=0.1,
+        noise_std_type="scalar",
+        student_obs_normalization=False,
+        teacher_obs_normalization=False,
+        teacher_hidden_dims=[512, 256, 128],
+        # Student is small (no privileged signal to compress).
+        student_hidden_dims=[128, 128, 128],
         activation="elu",
     )
     algorithm = RslRlDistillationAlgorithmCfg(

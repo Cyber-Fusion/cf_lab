@@ -62,11 +62,12 @@ class BlindStudentObservationsCfg(ObservationsCfg):
 
 def _apply_blind_student_overlay(cfg) -> None:
     # Strip privileged terms from the student policy group; do NOT add a depth camera.
-    # Keep concatenate_terms=False so the trainer sees a Dict obs with the same shape
-    # contract as the vision student (minus the depth key).
+    # All remaining terms are 1-D vectors → concatenate_terms=True yields a single
+    # tensor that RSL-RL's StudentTeacher policy consumes directly. (Previously
+    # False to match the custom DAgger trainer's Dict-obs contract.)
     cfg.observations.policy.base_lin_vel = None
     cfg.observations.policy.height_scan = None
-    cfg.observations.policy.concatenate_terms = False
+    cfg.observations.policy.concatenate_terms = True
 
 
 @configclass
