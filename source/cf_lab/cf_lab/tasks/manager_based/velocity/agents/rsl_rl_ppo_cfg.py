@@ -47,6 +47,14 @@ class AygFlatPPORunnerCfg(AygRoughPPORunnerCfg):
         self.policy.actor_hidden_dims = [128, 128, 128]
         self.policy.critic_hidden_dims = [128, 128, 128]
 
+
+@configclass
+class AygRoughStudentPPORunnerCfg(AygRoughPPORunnerCfg):
+    # Stand-in for the eventual student/distillation runner; the env loads with
+    # vanilla PPO but the policy network does NOT yet consume the depth tensor.
+    # Real CNN encoder + DAgger distillation is the next phase.
+    experiment_name = "ayg_rough_student"
+
 @configclass
 class AygSpotInspPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
