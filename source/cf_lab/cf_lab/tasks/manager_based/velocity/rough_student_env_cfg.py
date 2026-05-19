@@ -96,6 +96,11 @@ def _apply_student_overlay(cfg) -> None:
     )
 
     # Student `policy` group: strip privileged terms, add depth with sim-to-real noise.
+    # history_length=10 + flatten_history_dim=True gives the depth term a 10-frame
+    # history that the env flattens into a single (N, T*H*W*1) vector. The vision
+    # StudentTeacher subclass (cf_lab.learning.student_teacher_vision) reshapes this
+    # back to (N, T, H, W) inside the depth CNN, after slicing past the leading ego
+    # terms in the concatenated policy obs.
     cfg.observations.policy.base_lin_vel = None
     cfg.observations.policy.height_scan = None
     cfg.observations.policy.depth = ObsTerm(
@@ -106,9 +111,14 @@ def _apply_student_overlay(cfg) -> None:
             "normalize": True,
         },
         noise=Gnoise(mean=0.0, std=0.02),
+        history_length=10,
+        flatten_history_dim=True,
     )
-    # depth is (N, H, W, 1); can't concatenate with (N, K) vector terms.
-    cfg.observations.policy.concatenate_terms = False
+    # All policy terms now share rank — single concatenated tensor for the
+    # RSL-RL DistillationRunner. Term order (set by __dict__ insertion):
+    # base_ang_vel(3) + projected_gravity(3) + velocity_commands(3)
+    # + joint_pos(12) + joint_vel(12) + actions(12) + depth(10*45*80=36000) = 36045.
+    cfg.observations.policy.concatenate_terms = True
 
 
 @configclass

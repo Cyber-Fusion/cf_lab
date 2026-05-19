@@ -89,8 +89,9 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.rough_student_env_cfg:AygRoughStudentEnvCfg",
-        # Distillation runner cfg added on the per-experiment branches
-        # (16-rough-student-blind, 16-rough-student-vision-tilt30-f10).
+        "rsl_rl_distillation_cfg_entry_point": (
+            f"{agents.__name__}.rsl_rl_distillation_cfg:AygRoughStudentVisionDistillationCfg"
+        ),
     },
 )
 
@@ -100,5 +101,8 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.rough_student_env_cfg:AygRoughStudentEnvCfg_PLAY",
+        "rsl_rl_distillation_cfg_entry_point": (
+            f"{agents.__name__}.rsl_rl_distillation_cfg:AygRoughStudentVisionDistillationCfg"
+        ),
     },
 )
