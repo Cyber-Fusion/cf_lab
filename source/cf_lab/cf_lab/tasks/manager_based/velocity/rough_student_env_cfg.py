@@ -120,6 +120,17 @@ def _apply_student_overlay(cfg) -> None:
     # + joint_pos(12) + joint_vel(12) + actions(12) + depth(10*45*80=36000) = 36045.
     cfg.observations.policy.concatenate_terms = True
 
+    # Forward-biased command sampling for the vision student.
+    # Teacher was trained on [-1, 1] symmetric ranges (see rough_env_cfg.py:133-135)
+    # using its full 187-ray height_scan. The student's forward depth cone can't
+    # see what's behind/beside the feet, so asking it to imitate teacher actions
+    # on backward/lateral commands is asking it to copy without the information
+    # the teacher used. Subset stays in-distribution for the teacher (so labels
+    # remain valid) while limiting the student to motions its camera supports.
+    cfg.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
+    cfg.commands.base_velocity.ranges.lin_vel_y = (-0.3, 0.3)
+    cfg.commands.base_velocity.ranges.ang_vel_z = (-0.5, 0.5)
+
 
 @configclass
 class AygRoughStudentEnvCfg(AygRoughEnvCfg):

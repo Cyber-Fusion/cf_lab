@@ -47,41 +47,73 @@ from isaaclab_tasks.utils import parse_env_cfg  # noqa: E402
 import cf_lab.tasks  # noqa: E402, F401  # registers Ayg gym envs
 
 
+# Layout pinned by rough_student_env_cfg.py + rsl_rl_distillation_cfg.py:
+#   ego_dim   = base_ang_vel(3) + projected_gravity(3) + velocity_commands(3)
+#             + joint_pos(12) + joint_vel(12) + actions(12) = 45
+#   depth     = history_length * H * W = 10 * 45 * 80 = 36000
+#   policy    = ego + depth_flat = 36045
+#   teacher   = 48 ego + 187 height_scan rays = 235
+EGO_DIM = 45
+DEPTH_T, DEPTH_H, DEPTH_W = 10, 45, 80
+DEPTH_FLAT = DEPTH_T * DEPTH_H * DEPTH_W
+EXPECTED_POLICY_DIM = EGO_DIM + DEPTH_FLAT
+EXPECTED_TEACHER_DIM = 235
+
+
 def _depth_tensor(obs):
-    """Pick the depth tensor out of whatever obs shape the env emits."""
+    """Extract the most recent depth frame from the concatenated student obs.
+
+    The env emits obs["policy"] = (N, 45 + 10*45*80) where the trailing 36000
+    is the 10-frame stack flattened in time-first order (frame[t=0] first,
+    frame[t=9] last). We pull the last frame and reshape to (N, H, W, 1) so
+    the rest of this script can stay shape-symmetric with the legacy Dict
+    layout it was written for.
+    """
     if isinstance(obs, dict):
         policy = obs.get("policy", obs)
-        if isinstance(policy, dict):
-            return policy["depth"]
+        if isinstance(policy, dict) and "depth" in policy:
+            # legacy non-concatenated layout — kept for the blind variant
+            depth = policy["depth"]
+            return depth if depth.ndim == 4 else depth.view(depth.shape[0], DEPTH_H, DEPTH_W, 1)
+        if torch.is_tensor(policy):
+            assert policy.shape[-1] == EXPECTED_POLICY_DIM, (
+                f"policy obs has shape {tuple(policy.shape)} but expected last dim "
+                f"{EXPECTED_POLICY_DIM} (ego={EGO_DIM} + depth_flat={DEPTH_FLAT})"
+            )
+            depth_flat = policy[..., EGO_DIM:]
+            n = depth_flat.shape[0]
+            stack = depth_flat.view(n, DEPTH_T, DEPTH_H, DEPTH_W)
+            return stack[:, -1].unsqueeze(-1)  # (N, H, W, 1) — most recent frame
     raise TypeError(f"unexpected obs structure: {type(obs)}")
 
 
 def _check_obs_groups(obs) -> None:
-    """Assert the two-group DAgger contract: policy(Dict with depth+ego) + teacher(1-D vec)."""
+    """Assert the two-group DAgger contract on the *concatenated* student layout."""
     assert isinstance(obs, dict), f"top-level obs must be Dict (got {type(obs).__name__})"
     assert "policy" in obs, f"missing 'policy' group; keys={list(obs.keys())}"
     assert "teacher" in obs, f"missing 'teacher' group; keys={list(obs.keys())}"
 
     policy = obs["policy"]
-    assert isinstance(policy, dict), (
-        f"'policy' must be a Dict because depth can't concatenate with vector terms "
-        f"(got {type(policy).__name__})"
+    assert torch.is_tensor(policy), (
+        f"'policy' is expected to be a single concatenated tensor "
+        f"(rough_student_env_cfg.py sets concatenate_terms=True); got {type(policy).__name__}"
     )
-    assert "depth" in policy, f"missing 'depth' in policy group; keys={list(policy.keys())}"
-
-    # Aggregate the non-depth (ego) terms — what the student MLP head will see.
-    ego_terms = {k: v for k, v in policy.items() if k != "depth"}
-    ego_total = sum(int(v.shape[-1]) for v in ego_terms.values())
-    _log(f"[CHECK] policy ego terms: {sorted(ego_terms.keys())} total_dim={ego_total}")
+    assert policy.ndim == 2, f"'policy' expected (N, K), got shape={tuple(policy.shape)}"
+    policy_dim = int(policy.shape[-1])
+    _log(f"[CHECK] policy dim={policy_dim} (expected {EXPECTED_POLICY_DIM} = {EGO_DIM} ego + {DEPTH_FLAT} depth)")
+    assert policy_dim == EXPECTED_POLICY_DIM, (
+        f"policy dim ({policy_dim}) != expected ({EXPECTED_POLICY_DIM}) — "
+        "env term order or depth history_length may have drifted from cfg"
+    )
 
     teacher = obs["teacher"]
     assert torch.is_tensor(teacher), f"'teacher' must be a 1-D vector tensor (got {type(teacher).__name__})"
     assert teacher.ndim == 2, f"'teacher' expected (N, K), got shape={tuple(teacher.shape)}"
     teacher_dim = int(teacher.shape[-1])
-    _log(f"[CHECK] teacher dim={teacher_dim} (expected 235 = 48 ego + 187 height_scan rays)")
-    assert teacher_dim > ego_total, (
-        f"teacher dim ({teacher_dim}) should exceed student ego dim ({ego_total}) — "
-        "teacher has the extra base_lin_vel + height_scan"
+    _log(f"[CHECK] teacher dim={teacher_dim} (expected {EXPECTED_TEACHER_DIM} = 48 ego + 187 height_scan rays)")
+    assert teacher_dim == EXPECTED_TEACHER_DIM, (
+        f"teacher dim ({teacher_dim}) != expected ({EXPECTED_TEACHER_DIM}) — "
+        "locked teacher checkpoint won't load with this obs shape"
     )
 
 
