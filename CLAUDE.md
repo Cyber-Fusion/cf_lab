@@ -6,18 +6,15 @@
 
 ## Common Commands
 
-### Installation
+### Docker
+
+Always run commands inside the container.
 ```bash
-python -m pip install -e source/cf_lab
+make up        # Start the container (with X11 forwarding)
+docker compose -f docker/compose.yaml exec cf-lab bash   # Run bash in the container
 ```
 
 ### Training
-
-**Important:** You must set BLAS/OpenMP threading variables to avoid crashes (illegal instruction / segfault from OpenBLAS thread conflicts):
-
-```bash
-export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-```
 
 Then run training:
 

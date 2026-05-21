@@ -1,14 +1,17 @@
-COMPOSE := docker compose -f docker/docker-compose.yaml
+COMPOSE := docker compose -f docker/compose.yaml
 
-.PHONY: build up exec down
+.PHONY: build up start run exec attach down stop xhost
 
 build:
 	$(COMPOSE) build
 
-up:
+xhost:
+	@xhost +local:root >/dev/null 2>&1 || true
+
+up: xhost
 	$(COMPOSE) up -d
 
-exec:
+exec: up
 	$(COMPOSE) exec cf-lab bash
 
 down:
