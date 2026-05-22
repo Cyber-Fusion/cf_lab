@@ -19,6 +19,8 @@ services:
       - ../IsaacLab:/workspace/isaaclab:rw
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-${HOME}/.Xauthority}:/root/.Xauthority
+      - /tmp/nvidia-mps:/tmp/nvidia-mps
+      - /tmp/nvidia-log:/tmp/nvidia-log
       - ${HOME}/docker/isaac-sim/cache/kit:/isaac-sim/kit/cache:rw
       - ${HOME}/docker/isaac-sim/cache/ov:/root/.cache/ov:rw
       - ${HOME}/docker/isaac-sim/cache/pip:/root/.cache/pip:rw

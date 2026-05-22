@@ -117,6 +117,42 @@ To enable your extension, follow these steps:
     - Find your extension under the `Third Party` category.
     - Toggle it to enable your extension.
 
+## Running Multiple Trainings on One GPU
+
+When two (or more) training jobs share a GPU, by default the NVIDIA driver
+time-slices CUDA contexts and each job gets roughly half the wall-clock
+throughput. NVIDIA's Multi-Process Service (MPS) lets the jobs share SMs
+concurrently instead, which is worth enabling whenever a single training
+doesn't saturate the GPU (typical for Isaac Lab at a few thousand envs).
+
+Start the MPS daemon **on the host** before launching the container (it must
+run as root to create its pipes in `/tmp/nvidia-mps`):
+
+```bash
+sudo nvidia-cuda-mps-control -d
+```
+
+The compose file bind-mounts `/tmp/nvidia-mps` and `/tmp/nvidia-log` into the
+container, so any training launched inside the container will auto-attach as
+an MPS client — no extra environment variables or flags needed.
+
+Verify, from inside the container:
+
+```bash
+echo get_server_list | nvidia-cuda-mps-control   # prints the server PID once a client connects
+nvidia-smi --query-compute-apps=pid,used_memory --format=csv
+# you should see an extra ~30 MiB process: nvidia-cuda-mps-server
+```
+
+To stop the daemon (on the host):
+
+```bash
+echo quit | sudo nvidia-cuda-mps-control
+```
+
+Caveats: if the MPS server dies, all its clients die with it, so it is not
+recommended for unattended multi-day runs unless you accept that risk.
+
 ## Code formatting
 
 We have a pre-commit template to automatically format your code.
