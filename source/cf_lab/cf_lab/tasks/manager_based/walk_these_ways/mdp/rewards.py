@@ -40,6 +40,47 @@ def _locomotion_gate(env: ManagerBasedRLEnv, cmd_threshold: float = 0.05, vel_th
     return cmd_active | vel_active
 
 
+def _zero_cmd_mask(env: ManagerBasedRLEnv, cmd_threshold: float = 0.05) -> torch.Tensor:
+    """True per env when the velocity command is ~zero (regardless of body velocity)."""
+    cmd = env.command_manager.get_command("base_velocity")
+    return cmd.norm(p=1, dim=1) <= cmd_threshold
+
+
+def track_lin_vel_xy_exp_speed_adaptive(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    sigma_low: float = 0.25,
+    sigma_high: float = 0.5,
+    sigma_low_vel: float = 1.0,
+    sigma_high_vel: float = 2.0,
+    ramp_at_vel: float = 1.0,
+    ramp_rate: float = 0.5,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward tracking of linear velocity commands (xy axes) with a speed-adaptive sigma and linear ramp.
+
+    Sigma of the squared-error exp kernel is linearly interpolated from ``sigma_low`` to
+    ``sigma_high`` over the commanded ``|v_xy|`` range ``[sigma_low_vel, sigma_high_vel]`` (clamped
+    outside). The reward is then scaled by ``max(1.0, 1.0 + ramp_rate * (|v_cmd| - ramp_at_vel))``,
+    mirroring the spot-like ``base_linear_velocity_reward`` ramp.
+    """
+    asset: RigidObject = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)[:, :2]
+    vel_cmd_magnitude = torch.linalg.norm(cmd, dim=1)
+
+    t = torch.clamp((vel_cmd_magnitude - sigma_low_vel) / (sigma_high_vel - sigma_low_vel), min=0.0, max=1.0)
+    sigma = sigma_low + t * (sigma_high - sigma_low)
+
+    lin_vel_error = torch.sum(
+        torch.square(cmd - asset.data.root_lin_vel_b[:, :2]),
+        dim=1,
+    )
+    reward = torch.exp(-lin_vel_error / sigma**2)
+
+    velocity_scaling = torch.clamp(1.0 + ramp_rate * (vel_cmd_magnitude - ramp_at_vel), min=1.0)
+    return reward * velocity_scaling
+
+
 def track_base_height_exp(
     env: ManagerBasedRLEnv, std: float, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ):
@@ -883,25 +924,38 @@ def stand_still(
 
 
 def stand_when_zero_command(
-    env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+    env,
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    use_cmd_only_gate: bool = False,
 ) -> torch.Tensor:
-    """Penalize joint positions that deviate from the default one when no command."""
+    """Penalize joint positions that deviate from the default one when no command.
+
+    When ``use_cmd_only_gate`` is False (default), the gate is the inverse of the locomotion
+    gate (which also looks at body velocity). When True, gate only on a near-zero velocity
+    command — the reward fires even if the body still has residual velocity.
+    """
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     diff_angle = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
 
-    return torch.norm(diff_angle, p=1, dim=1) * ~_locomotion_gate(env)
+    mask = _zero_cmd_mask(env) if use_cmd_only_gate else ~_locomotion_gate(env)
+    return torch.norm(diff_angle, p=1, dim=1) * mask
 
 
 def stand_still_when_zero_command(
-    env, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+    env,
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    use_cmd_only_gate: bool = False,
 ) -> torch.Tensor:
-    """Penalize joint velocities when no command."""
+    """Penalize joint velocities when no command. See :func:`stand_when_zero_command` for ``use_cmd_only_gate``."""
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     joint_vel = asset.data.joint_vel[:, asset_cfg.joint_ids]
 
-    return torch.norm(joint_vel, p=1, dim=1) * ~_locomotion_gate(env)
+    mask = _zero_cmd_mask(env) if use_cmd_only_gate else ~_locomotion_gate(env)
+    return torch.norm(joint_vel, p=1, dim=1) * mask
 
 
 def zero_vel_when_zero_command(

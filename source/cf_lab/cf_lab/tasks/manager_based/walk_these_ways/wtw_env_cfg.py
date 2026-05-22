@@ -112,9 +112,24 @@ class CommandsCfg:
     gait_command = mdp.UniformGaitCommandCfgQuad(
         resampling_time_range=(5.0, 5.0),  # Fixed resampling time of 5 seconds
         debug_vis=False,  # No debug visualization needed
+        # Shrink the commanded body pitch/roll/base-height-deviation at high |vx|; aggressive
+        # posture is harder to maintain while moving fast, so the policy is never asked to
+        # track a physically marginal combination.
+        couple_to_vx=True,
+        default_base_height=0.30,
+        velocity_command_name="base_velocity",
+        # Interpolate stance fraction from a grounded walk-trot at low |vx| to an aerial trot
+        # at high |vx|. Range bounds: `ranges.durations` at |vx|<=duration_vx_low,
+        # `durations_high_vx` at |vx|>=duration_vx_high, linear in between.
+        couple_duration_to_vx=True,
+        couple_frequency_to_vx=True,
+        duration_vx_low=1.0,
+        duration_vx_high=2.5,
+        durations_high_vx=(0.35, 0.5),
+        frequencies_high_vx=(2.5, 3.5),
         ranges=mdp.UniformGaitCommandCfgQuad.Ranges(
-            frequencies=(1.5, 3.0),  # Gait frequency range [Hz]
-            durations=(0.5, 0.5),  # Contact duration range [0-1]
+            frequencies=(1.5, 2.0),  # Low-|vx| gait frequency range [Hz]
+            durations=(0.5, 0.75),  # Low-|vx| contact duration range [0-1]
             offsets2=(0.5, 0.5),  # Phase offsets2 range [0-1]
             offsets3=(0.0, 0.0),  # Phase offsets3 range [0-1]
             offsets4=(0.0, 0.0),  # Phase offsets4 range [0-1]
@@ -125,7 +140,7 @@ class CommandsCfg:
         ),
     )
 
-    base_velocity = mdp.UniformVelocityCommandCfg(
+    base_velocity = mdp.MultiGaitVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
         rel_standing_envs=0.1,
@@ -133,9 +148,38 @@ class CommandsCfg:
         heading_command=True,
         heading_control_stiffness=0.5,
         debug_vis=True,
-        ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-0.0, 0.0), heading=(-math.pi, math.pi)
+        # IIR low-pass filter applied each control step so resample-time jumps fade in smoothly.
+        filter_beta=0.15,
+        # Curriculum-start bound on |vx|; ramped to the per-gait final range over `anneal_steps`
+        # env steps (see CurriculumCfg.gait_velocity_curriculum). vy and omega are not
+        # curriculum-ramped (their per-gait ranges are already small).
+        initial_max_lin_vel_x=1.0,
+        gait_command_name="gait_command",
+        # Uniform vx-coupling: filtered vy and omega are multiplied by 1/max(1, |vx|/1.0) every
+        # step, matching the same rule applied to pitch/roll/base-height by the sibling
+        # GaitCommandQuad.
+        couple_to_vx=True,
+        # Inherited `ranges` field is used only by the parent's heading-control clamp; set its
+        # ang_vel_z to the maximum per-gait |omega| (1.0). Actual sampling uses ranges_per_gait.
+        ranges=mdp.MultiGaitVelocityCommandCfg.Ranges(
+            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
         ),
+        # Placeholder per-gait ranges; override per terrain config (flat/rough). Order matches
+        # GaitCommandQuad.CANONICAL_GAITS: [trot, pace, bound, pronk].
+        ranges_per_gait=[
+            mdp.MultiGaitVelocityCommandCfg.Ranges(
+                lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            ),
+            mdp.MultiGaitVelocityCommandCfg.Ranges(
+                lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            ),
+            mdp.MultiGaitVelocityCommandCfg.Ranges(
+                lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            ),
+            mdp.MultiGaitVelocityCommandCfg.Ranges(
+                lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            ),
+        ],
     )
 
 
@@ -167,11 +211,6 @@ class ObservationsCfg:
             params={"asset_cfg": SceneEntityCfg("robot")},
             clip=(-100, 100),
             noise=Unoise(n_min=-0.05, n_max=0.05),
-        )
-        velocity_commands = ObsTerm(
-            func=mdp.generated_commands,
-            params={"command_name": "base_velocity"},
-            clip=(-100, 100),
         )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
         clock_inputs = ObsTerm(func=mdp.get_clock_inputs)
@@ -356,16 +395,25 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # ================================= Task ================================= #
+    # Squared-error exponential kernels, matching the velocity env: exp(-err^2 / std^2).
     track_lin_vel_xy_exp = WtwRewTerm(
-        func=ayg_mdp.base_linear_velocity_reward,
+        func=mdp.track_lin_vel_xy_exp_speed_adaptive,
         weight=1.0,
-        params={"std": 1.0, "ramp_rate": 0.5, "ramp_at_vel": 1.0, "asset_cfg": SceneEntityCfg("robot")},
+        params={
+            "command_name": "base_velocity",
+            "sigma_low": 0.25,
+            "sigma_high": 0.5,
+            "sigma_low_vel": 1.0,
+            "sigma_high_vel": 2.0,
+            "ramp_at_vel": 1.0,
+            "ramp_rate": 0.5,
+        },
         reward_type=RewardType.ADDITIVE,
     )
     track_ang_vel_z_exp = WtwRewTerm(
-        func=ayg_mdp.base_angular_velocity_reward,
+        func=mdp.track_ang_vel_z_exp,
         weight=0.5,
-        params={"std": 2.0, "asset_cfg": SceneEntityCfg("robot")},
+        params={"command_name": "base_velocity", "std": 0.5},
         reward_type=RewardType.ADDITIVE,
     )
     
@@ -377,7 +425,7 @@ class RewardsCfg:
             "tracking_contacts_shaped_force": -1.0,
             "tracking_contacts_shaped_vel": -1.0,
             "gait_force_sigma": 50.0,
-            "gait_vel_sigma": 1.0,
+            "gait_vel_sigma": 0.25,
             "kappa_gait_probs": 0.07,
             "command_name": "gait_command",
             "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
@@ -543,8 +591,15 @@ class CurriculumCfg:
         params={
             "sigma_min": 1.0,
             "sigma_max": 20.0,
-            "anneal_steps": 48000,
+            "anneal_steps": 12000,
         },
+    )
+
+    # Linearly grow the max velocity per gait from `initial_max_*` (1.0) to the per-gait
+    # final ranges over 24000 env steps.
+    gait_velocity_curriculum = CurrTerm(
+        func=mdp.gait_velocity_curriculum,
+        params={"anneal_steps": 120000, "command_name": "base_velocity"},
     )
 
 

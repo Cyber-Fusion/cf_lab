@@ -32,6 +32,26 @@ gym.register(
 )
 
 gym.register(
+    id="Isaac-WTW-Flat-Ayg-v1",
+    entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.flat_env_cfg_v1:AygFlatWTWEnvCfgV1",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygFlatWTWPPORunnerCfgV1",
+    },
+)
+
+gym.register(
+    id="Isaac-WTW-Flat-Ayg-Play-v1",
+    entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.flat_env_cfg_v1:AygFlatWTWEnvCfgV1_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AygFlatWTWPPORunnerCfgV1",
+    },
+)
+
+gym.register(
     id="Isaac-WTW-Rough-Ayg-v0",
     entry_point="cf_lab.envs:WTWManagerBasedRLEnv",
     disable_env_checker=True,

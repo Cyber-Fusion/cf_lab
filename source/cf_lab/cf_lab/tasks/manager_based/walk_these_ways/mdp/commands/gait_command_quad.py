@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 from isaaclab.managers import CommandTerm
 
+from .scaling import vx_scale
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
@@ -40,9 +42,26 @@ class GaitCommandQuad(CommandTerm):
         # create buffers to store the command
         # command format: [freq, duration, offset2, offset3, offset4, feet_h, base_h, pitch, roll]
         self.gait_command = torch.zeros(self.num_envs, 9, device=self.device)
+        # Unscaled (sampled) pitch/roll/base_height targets, kept so the vx-coupling scaling can
+        # be re-applied each step without losing the original magnitude when |vx| drops back
+        # below the knee.
+        self._sampled_pitch = torch.zeros(self.num_envs, device=self.device)
+        self._sampled_roll = torch.zeros(self.num_envs, device=self.device)
+        # Initialise base_height cache to the default so the deviation `(_sampled - default)`
+        # is zero before the first resample (no spurious height change at t=0).
+        self._sampled_base_height = torch.full(
+            (self.num_envs,), float(cfg.default_base_height), device=self.device
+        )
+        # Per-env uniform percentile in [0, 1] used to pick a stable position within the
+        # vx-dependent duration range (see `couple_duration_to_vx`). Sampled at resample time.
+        self._duration_u = torch.zeros(self.num_envs, device=self.device)
+        # Same idea for the frequency range (see `couple_frequency_to_vx`).
+        self._frequency_u = torch.zeros(self.num_envs, device=self.device)
         # incremental gait phase state
         self.gait_indices = torch.zeros(self.num_envs, device=self.device)
         self.foot_indices = torch.zeros(self.num_envs, 4, device=self.device)
+        # canonical gait index per env (0=trot, 1=pace, 2=bound, 3=pronk); stays 0 when multi_gait=False
+        self.gait_ids = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         self.dt = env.step_dt
         # move canonical gaits to device
         self._canonical_gaits = self.CANONICAL_GAITS.to(self.device)
@@ -80,6 +99,9 @@ class GaitCommandQuad(CommandTerm):
         n = len(env_ids)
         # assign each env to one of 4 gait categories uniformly
         gait_idx = torch.randint(0, 4, (n,), device=self.device)
+        # remember the canonical gait assignment so sibling terms (e.g. MultiGaitVelocityCommand)
+        # can read it without re-running the random draw
+        self.gait_ids[env_ids] = gait_idx
         offsets = self._canonical_gaits[gait_idx]  # (n, 3)
         # optionally add jitter around canonical values
         if not self.cfg.binary_phases:
@@ -93,9 +115,25 @@ class GaitCommandQuad(CommandTerm):
         # sample gait parameters
         r = torch.empty(len(env_ids), device=self.device)
         # -- frequency
-        self.gait_command[env_ids, 0] = r.uniform_(*self.cfg.ranges.frequencies)
+        if self.cfg.couple_frequency_to_vx:
+            # store percentile; actual frequency is computed every step in `_update_command`
+            self._frequency_u[env_ids] = r.uniform_(0.0, 1.0)
+            # Seed gait_command[:, 0] with the low-|vx| range value so it is valid before
+            # the first `_update_command` runs (reward terms read it at step 1, which
+            # happens before command_manager.compute on the same tick).
+            lo_f, hi_f = self.cfg.ranges.frequencies
+            self.gait_command[env_ids, 0] = lo_f + self._frequency_u[env_ids] * (hi_f - lo_f)
+        else:
+            self.gait_command[env_ids, 0] = r.uniform_(*self.cfg.ranges.frequencies)
         # -- contact duration
-        self.gait_command[env_ids, 1] = r.uniform_(*self.cfg.ranges.durations)
+        if self.cfg.couple_duration_to_vx:
+            # store percentile; actual duration is computed every step in `_update_command`
+            self._duration_u[env_ids] = r.uniform_(0.0, 1.0)
+            # Same seeding as for frequency above.
+            lo_d, hi_d = self.cfg.ranges.durations
+            self.gait_command[env_ids, 1] = lo_d + self._duration_u[env_ids] * (hi_d - lo_d)
+        else:
+            self.gait_command[env_ids, 1] = r.uniform_(*self.cfg.ranges.durations)
         # -- phase offsets
         if self.cfg.multi_gait:
             self._sample_multi_gait_offsets(env_ids)
@@ -111,10 +149,46 @@ class GaitCommandQuad(CommandTerm):
         self.gait_command[env_ids, 7] = r.uniform_(*self.cfg.ranges.body_pitch)
         # -- body roll
         self.gait_command[env_ids, 8] = r.uniform_(*self.cfg.ranges.body_roll)
+        # Cache sampled values for the vx-coupling scaling in `_update_command`.
+        self._sampled_base_height[env_ids] = self.gait_command[env_ids, 6]
+        self._sampled_pitch[env_ids] = self.gait_command[env_ids, 7]
+        self._sampled_roll[env_ids] = self.gait_command[env_ids, 8]
 
 
     def _update_command(self):
         """Incrementally advance gait phase and compute per-foot indices."""
+        # Apply vx-coupling first so the phase advance below uses up-to-date frequency.
+        # The vx reads the *previous* step's filtered value from the sibling velocity term
+        # (it ticks after this one); the 1-step lag is negligible at the IIR time constant.
+        if self.cfg.couple_to_vx or self.cfg.couple_duration_to_vx or self.cfg.couple_frequency_to_vx:
+            vel_term = self._env.command_manager.get_term(self.cfg.velocity_command_name)
+            vx = vel_term.command[:, 0]
+            # Uniform 1/max(1,|vx|) shrink on pitch / roll / base-height-deviation.
+            if self.cfg.couple_to_vx:
+                scale = vx_scale(vx)
+                self.gait_command[:, 7] = self._sampled_pitch * scale
+                self.gait_command[:, 8] = self._sampled_roll * scale
+                default = self.cfg.default_base_height
+                self.gait_command[:, 6] = default + (self._sampled_base_height - default) * scale
+            # Linearly interpolate duration and/or frequency ranges between low- and high-vx
+            # settings, then place each env at its per-env percentile.
+            if self.cfg.couple_duration_to_vx or self.cfg.couple_frequency_to_vx:
+                vx_abs = vx.abs()
+                denom = max(self.cfg.duration_vx_high - self.cfg.duration_vx_low, 1e-6)
+                alpha = ((vx_abs - self.cfg.duration_vx_low) / denom).clamp(0.0, 1.0)
+                if self.cfg.couple_duration_to_vx:
+                    lo_lo, lo_hi = self.cfg.ranges.durations
+                    hi_lo, hi_hi = self.cfg.durations_high_vx
+                    range_lo = lo_lo + alpha * (hi_lo - lo_lo)
+                    range_hi = lo_hi + alpha * (hi_hi - lo_hi)
+                    self.gait_command[:, 1] = range_lo + self._duration_u * (range_hi - range_lo)
+                if self.cfg.couple_frequency_to_vx:
+                    lo_lo, lo_hi = self.cfg.ranges.frequencies
+                    hi_lo, hi_hi = self.cfg.frequencies_high_vx
+                    range_lo = lo_lo + alpha * (hi_lo - lo_lo)
+                    range_hi = lo_hi + alpha * (hi_hi - lo_hi)
+                    self.gait_command[:, 0] = range_lo + self._frequency_u * (range_hi - range_lo)
+
         frequencies = self.gait_command[:, 0]
         self.gait_indices = torch.remainder(self.gait_indices + self.dt * frequencies, 1.0)
         offsets2 = self.gait_command[:, 2]

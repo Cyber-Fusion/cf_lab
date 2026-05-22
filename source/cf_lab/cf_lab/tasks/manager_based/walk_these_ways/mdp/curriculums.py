@@ -76,3 +76,25 @@ def anneal_sigma_exp_neg(
     new_val = sigma_min + (sigma_max - sigma_min) * (progress**2)
     env.reward_manager.sigma = new_val
     return new_val
+
+
+def gait_velocity_curriculum(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    anneal_steps: int = 24000,
+    command_name: str = "base_velocity",
+) -> float:
+    """Linearly ramp the velocity command's curriculum_progress from 0 to 1 over ``anneal_steps``.
+
+    The :class:`MultiGaitVelocityCommand` reads ``curriculum_progress`` on every resample to
+    interpolate per-component bounds from ``(-initial_max, +initial_max)`` to the per-gait
+    final range. Setting the scalar attribute on the singleton command term is O(1); the new
+    value takes effect at the next resampling tick.
+
+    Returns:
+        The current progress value in ``[0, 1]`` (for logging).
+    """
+    progress = min(env.common_step_counter / anneal_steps, 1.0)
+    cmd_term = env.command_manager.get_term(command_name)
+    cmd_term.curriculum_progress = progress
+    return progress

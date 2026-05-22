@@ -36,13 +36,13 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         # Secondary Tasks - Exp neg penalties
         self.rewards.gait.weight = -16.0
         self.rewards.footswing_height.weight = -0.0
-        self.rewards.foot_clearance.weight = -150.0
+        self.rewards.foot_clearance.weight = -200.0
         
         self.rewards.base_height_l2.weight = -150.0
         self.rewards.raibert_heuristic.weight = -0.0
         self.rewards.feet_slip.weight = -0.04
         
-        self.rewards.undesired_contacts.weight = -10.0
+        self.rewards.undesired_contacts.weight = -50.0
         
         self.rewards.stand_when_zero_command.weight = -0.2
         self.rewards.stand_still_when_zero_command.weight = -0.1
@@ -64,10 +64,31 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         self.rewards.action_smoothness_l2.weight = -0.01
 
         # ============================= Commands ============================= #
-        
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1.5)
-        self.commands.base_velocity.ranges.lin_vel_y = (-1.0, 1.0)
+
+        # Per-gait sampling ranges, order: [trot, pace, bound, pronk]. Placeholder values -
+        # replace per gait.
+        gait_ranges = self.commands.base_velocity.ranges_per_gait
+        # trot
+        gait_ranges[0].lin_vel_x = (-1.5, 1.5)
+        gait_ranges[0].lin_vel_y = (-1.0, 1.0)
+        gait_ranges[0].ang_vel_z = (-1.0, 1.0)
+        # pace
+        gait_ranges[1].lin_vel_x = (-1.5, 1.5)
+        gait_ranges[1].lin_vel_y = (-1.0, 1.0)
+        gait_ranges[1].ang_vel_z = (-1.0, 1.0)
+        # bound
+        gait_ranges[2].lin_vel_x = (-1.5, 1.5)
+        gait_ranges[2].lin_vel_y = (-1.0, 1.0)
+        gait_ranges[2].ang_vel_z = (-1.0, 1.0)
+        # pronk
+        gait_ranges[3].lin_vel_x = (-1.5, 1.5)
+        gait_ranges[3].lin_vel_y = (-1.0, 1.0)
+        gait_ranges[3].ang_vel_z = (-1.0, 1.0)
+
+        # Outer clamp used by the parent's heading-control output; max per-gait |omega| is 1.0.
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
+        self.commands.base_velocity.rel_heading_envs = 1.0
+
         self.commands.gait_command.multi_gait = True
         self.commands.gait_command.binary_phases = True
         self.commands.gait_command.ranges.frequencies = (1.5, 3.0)
