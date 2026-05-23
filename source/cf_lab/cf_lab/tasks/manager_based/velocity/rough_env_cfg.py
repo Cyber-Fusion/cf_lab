@@ -54,29 +54,6 @@ class AygRewardsCfg(RewardsCfg):
         },
     )
 
-    # -- symmetry (disabled by default, set weight < 0 to enable)
-    joint_mirror_haa = RewTerm(
-        func=ayg_mdp.JointMirrorSymmetryPenalty,
-        weight=0.0,
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "left_joint_names": ["LF_HAA", "LH_HAA"],
-            "right_joint_names": ["RF_HAA", "RH_HAA"],
-            "sign_flips": [1.0, 1.0],
-        },
-    )
-
-    action_mirror_haa = RewTerm(
-        func=ayg_mdp.ActionMirrorSymmetryPenalty,
-        weight=0.0,
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "left_joint_names": ["LF_HAA", "LH_HAA"],
-            "right_joint_names": ["RF_HAA", "RH_HAA"],
-            "sign_flips": [1.0, 1.0],
-        },
-    )
-
 
 @configclass
 class AygRoughEnvCfg(LocomotionVelocityRoughEnvCfg):

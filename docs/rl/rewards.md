@@ -33,7 +33,10 @@ Most reward terms use one of two kernel shapes to transform raw errors into rewa
 
 $$r = \sum_i e_i^2$$
 
-Properties: zero gradient at zero error (tolerant of small deviations), gradient grows linearly with error (strong pull back from large deviations), unbounded output.
+Properties:
+zero gradient at zero error (tolerant of small deviations),
+gradient grows linearly with error (strong pull back from large deviations),
+unbounded output.
 Used with negative weight to suppress a quantity.
 The quadratic shape makes it lenient near zero but aggressive against large values.
 
@@ -43,7 +46,10 @@ $$r = \exp\!\Bigl(-\frac{\|\mathbf{e}\|^2}{\sigma^2}\Bigr) \quad \text{(Gaussian
 \qquad\qquad
 r = \exp\!\Bigl(-\frac{\|\mathbf{e}\|}{\sigma}\Bigr) \quad \text{(Laplacian)}$$
 
-Properties: output bounded in $[0, 1]$, equals 1.0 at zero error, $\sigma$ controls the **tolerance radius** — the error magnitude at which reward drops to $\approx 0.37$.
+Properties:
+output bounded in $[0, 1]$,
+equals 1.0 at zero error,
+$\sigma$ controls the **tolerance radius** — the error magnitude at which reward drops to $\approx 0.37$.
 
 - The **Gaussian** variant has zero gradient at zero error and is smoother near the optimum — good as a default.
 - The **Laplacian** variant has a constant gradient magnitude near zero, providing stronger shaping signal when the policy is already close to the target — useful when precise tracking matters.
@@ -53,7 +59,10 @@ If the policy starts very far from the goal (e.g., a random initialization), exp
 L2 penalties do not have this problem — their gradient grows with error.
 This is why a typical reward set uses exp kernels for tracking objectives (bounded, well-shaped near target) and L2 penalties for regularization (always provides gradient).
 
-**Other kernels** (less common): **L1** ($\sum |e_i|$) — constant gradient regardless of error magnitude, useful for default-pose regularization; **L2 norm** ($\|\mathbf{e}\|$, unsquared) — constant-magnitude gradient like L1 but considers all dimensions jointly; **tanh** ($\tanh(\alpha \|\mathbf{e}\|)$) — saturating function used as a gating signal (e.g., weighting clearance reward by foot velocity) rather than as a standalone reward.
+**Other kernels** (less common):
+**L1** ($\sum |e_i|$) — constant gradient regardless of error magnitude, useful for default-pose regularization;
+**L2 norm** ($\|\mathbf{e}\|$, unsquared) — constant-magnitude gradient like L1 but considers all dimensions jointly;
+**tanh** ($\tanh(\alpha \|\mathbf{e}\|)$) — saturating function used as a gating signal (e.g., weighting clearance reward by foot velocity) rather than as a standalone reward.
 
 ### 1.3 Reward Scaling Considerations
 

@@ -61,8 +61,6 @@ class AygEnv(DirectRLEnv):
                 "feet_regulation",
                 "foot_clearance",
                 "base_height",
-                "joint_mirror_haa",
-                "action_mirror_haa",
             ]
         }
         # Get specific body indices
@@ -70,9 +68,6 @@ class AygEnv(DirectRLEnv):
         self._feet_ids, _ = self._contact_sensor.find_bodies(".*_Foot")
         self._undesired_contact_body_ids, _ = self._contact_sensor.find_bodies([".*_Shank", ".*_Thigh"])
         self._feet_body_ids, _ = self._robot.find_bodies(".*_Foot")
-        # HAA joint indices for symmetry rewards
-        self._left_haa_ids, _ = self._robot.find_joints(["LF_HAA", "LH_HAA"])
-        self._right_haa_ids, _ = self._robot.find_joints(["RF_HAA", "RH_HAA"])
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -202,8 +197,6 @@ class AygEnv(DirectRLEnv):
             ("feet_regulation", self.cfg.feet_regulation_reward_scale, self._reward_feet_regulation),
             ("foot_clearance", self.cfg.foot_clearance_reward_scale, self._reward_foot_clearance),
             ("base_height", self.cfg.base_height_reward_scale, self._reward_base_height),
-            ("joint_mirror_haa", self.cfg.joint_mirror_haa_reward_scale, self._reward_joint_mirror_haa),
-            ("action_mirror_haa", self.cfg.action_mirror_haa_reward_scale, self._reward_action_mirror_haa),
         ]
 
         total_reward = torch.zeros(self.num_envs, device=self.device)
@@ -277,16 +270,6 @@ class AygEnv(DirectRLEnv):
     def _reward_base_height(self) -> torch.Tensor:
         base_height = self._robot.data.root_pos_w[:, 2] - self._ground_height
         return torch.square(base_height - self.cfg.base_height_target)
-
-    def _reward_joint_mirror_haa(self) -> torch.Tensor:
-        """Penalize left-right HAA joint position asymmetry."""
-        q = self._robot.data.joint_pos
-        return torch.sum(torch.square(q[:, self._left_haa_ids] + q[:, self._right_haa_ids]), dim=1)
-
-    def _reward_action_mirror_haa(self) -> torch.Tensor:
-        """Penalize left-right HAA action asymmetry."""
-        a = self._actions
-        return torch.sum(torch.square(a[:, self._left_haa_ids] + a[:, self._right_haa_ids]), dim=1)
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
