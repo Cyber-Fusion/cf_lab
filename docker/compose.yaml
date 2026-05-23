@@ -4,7 +4,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: cf-lab
-    entrypoint: [bash, -c, "python -m pip install -e /workspace/cf_lab/source/cf_lab && exec bash"]
+    entrypoint: [bash, -c, "ln -sfn /isaac-sim /workspace/isaaclab/_isaac_sim && python -m pip install -e /workspace/cf_lab/source/cf_lab && exec bash"]
     stdin_open: true
     tty: true
     network_mode: host
