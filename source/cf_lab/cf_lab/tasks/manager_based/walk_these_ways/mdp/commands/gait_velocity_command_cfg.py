@@ -15,8 +15,7 @@ from .gait_velocity_command import MultiGaitVelocityCommand
 
 @configclass
 class MultiGaitVelocityCommandCfg(UniformVelocityCommandCfg):
-    """Velocity command with per-gait sampling ranges, a linear curriculum on the max ``vx``,
-    and a first-order IIR low-pass filter on the output.
+    """Velocity command with per-gait sampling ranges and a linear curriculum on the max ``vx``.
 
     Reads the canonical gait assignment (0=trot, 1=pace, 2=bound, 3=pronk) from a sibling
     :class:`GaitCommandQuad` term and samples velocities from the per-gait range for that env.
@@ -37,10 +36,6 @@ class MultiGaitVelocityCommandCfg(UniformVelocityCommandCfg):
     Only ``lin_vel_x`` is curriculum-ramped. ``lin_vel_y`` and ``ang_vel_z`` are sampled
     directly from their per-gait ranges from step 0, since those ranges are kept small
     (typically ``|vy|, |omega| <= 1``)."""
-
-    filter_beta: float = 0.05
-    """IIR low-pass filter coefficient applied every control step:
-    ``v[k] = beta * target[k] + (1 - beta) * v[k-1]``. Smaller -> slower fade."""
 
     gait_command_name: str = "gait_command"
     """Name of the sibling :class:`GaitCommandQuad` term from which to read gait_ids."""

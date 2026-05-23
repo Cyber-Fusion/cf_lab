@@ -2,7 +2,7 @@
 
 ## Commands
 
-- Add `MultiGaitVelocityCommand` with per-gait sampling ranges (trot / pace / bound / pronk) and a first-order IIR low-pass filter on the output to smooth resample-time jumps.
+- Add `MultiGaitVelocityCommand` with per-gait sampling ranges (trot / pace / bound / pronk).
 - Add a linear curriculum on the maximum commanded `|vx|`, ramping from `initial_max_lin_vel_x` to the per-gait final range over `anneal_steps`.
 - Couple secondary commands to `|vx|`: scale `vy`, `omega`, body pitch, body roll, and base-height deviation by `1 / max(1, |vx|/knee)` so the policy is not asked to track aggressive secondary objectives at high forward speed.
 - Couple gait frequency and contact duration to `|vx|`: interpolate between low-`|vx|` and high-`|vx|` ranges so high speeds enable shorter stance / higher cadence (aerial trot). Stance fraction: `(0.5, 0.75)` at low `|vx|` → `(0.35, 0.5)` at high `|vx|` (was fixed at `0.5`); frequency: `(1.5, 2.0)` → `(2.5, 3.5)` (was `(1.5, 3.0)`).

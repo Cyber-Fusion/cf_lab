@@ -272,6 +272,57 @@ class GaitRewardQuad(ManagerTermBase):
         return (reward / velocities.shape[1]) * self.vel_scale
 
 
+class ContactWhenWantedLowSpeed(GaitRewardQuad):
+    """Reward foot contact force during desired-stance phases, faded out at high |vx|.
+
+    GaitRewardQuad only *penalizes* the wrong quadrants (force in swing, velocity in stance).
+    At low |vx| the implicit pressure to plant the foot is weak (body velocity is small, so
+    an airborne foot during desired stance doesn't accrue much velocity penalty either), and
+    policies tend to drift toward low-duty-cycle hovering trots. This term explicitly rewards
+    contact force when contact is wanted, and is faded to zero above ``vx_high`` so it does
+    not interfere with the flying-trot regime at high speed.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.vx_low = float(cfg.params["vx_low"])
+        self.vx_high = float(cfg.params["vx_high"])
+        self.contact_force_sigma = float(cfg.params["contact_force_sigma"])
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        command_name: str,
+        sensor_cfg: SceneEntityCfg,
+        asset_cfg: SceneEntityCfg,
+        vx_low: float,
+        vx_high: float,
+        contact_force_sigma: float,
+        tracking_contacts_shaped_force,
+        tracking_contacts_shaped_vel,
+        gait_force_sigma,
+        gait_vel_sigma,
+        kappa_gait_probs,
+    ) -> torch.Tensor:
+        gait_params = env.command_manager.get_command(self.command_name)
+        desired_contact_states = self.compute_contact_targets(gait_params)
+
+        foot_forces = torch.norm(
+            self.contact_sensor.data.net_forces_w[:, self.sensor_cfg.body_ids], dim=-1
+        )  # (num_envs, num_feet)
+
+        # Reward contact force when desired_contact = 1: (1 - exp(-F^2/sigma)) → 0 with no
+        # force, → 1 with strong contact. Averaged across feet.
+        per_foot = desired_contact_states * (1.0 - torch.exp(-foot_forces**2 / self.contact_force_sigma))
+        contact_reward = per_foot.mean(dim=1)
+
+        # Fade with |vx|: 1.0 at |vx|<=vx_low, 0.0 at |vx|>=vx_high, linear in between.
+        vx_abs = env.command_manager.get_command("base_velocity")[:, 0].abs()
+        fade = 1.0 - torch.clamp((vx_abs - self.vx_low) / max(self.vx_high - self.vx_low, 1e-6), 0.0, 1.0)
+
+        return contact_reward * fade * _locomotion_gate(env)
+
+
 class FootSwingHeightQuad(GaitRewardQuad):
     def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
         super().__init__(cfg, env)

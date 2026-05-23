@@ -94,6 +94,14 @@ class AygCobblestoneWTWEnvCfg_PLAY(AygCobblestoneWTWEnvCfg):
         self.observations.policy.enable_corruption = False
         # remove random pushing event
         self.events.push_robot = None
+        # Skip the velocity curriculum so play sees the full per-gait |vx| envelope immediately;
+        # the gait command's couple_duration_to_vx then interpolates from walking trot at low
+        # |vx| to flying trot at high |vx|.
+        self.curriculum.gait_velocity_curriculum.params["anneal_steps"] = 1
+        # Skip the velocity curriculum so play sees the full per-gait |vx| envelope immediately;
+        # the gait command's couple_duration_to_vx then interpolates from walking trot at low
+        # |vx| to flying trot at high |vx|.
+        self.curriculum.gait_velocity_curriculum.params["anneal_steps"] = 1
 
 
 # =================================== v1 (no-history) =================================== #
@@ -126,3 +134,7 @@ class AygCobblestoneWTWEnvCfg_V1_PLAY(AygCobblestoneWTWEnvCfg_V1):
         self.observations.policy.enable_corruption = False
         # remove random pushing event
         self.events.push_robot = None
+        # Skip the velocity curriculum so play sees the full per-gait |vx| envelope immediately;
+        # the gait command's couple_duration_to_vx then interpolates from walking trot at low
+        # |vx| to flying trot at high |vx|.
+        self.curriculum.gait_velocity_curriculum.params["anneal_steps"] = 1

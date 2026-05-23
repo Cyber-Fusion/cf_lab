@@ -35,6 +35,10 @@ class AygRoughWTWEnvCfg(LocomotionWalkTheseWaysRoughEnvCfg):
         
         # Secondary Tasks - Exp neg penalties
         self.rewards.gait.weight = -16.0
+        # Positive: explicitly rewards contact during desired stance at low |vx|, where the
+        # gait reward's implicit-via-velocity-penalty pressure is too weak to enforce a
+        # high-duty-cycle walking trot.
+        self.rewards.contact_when_wanted_low_speed.weight = 5.0
         self.rewards.footswing_height.weight = -0.0
         self.rewards.foot_clearance.weight = -200.0
         

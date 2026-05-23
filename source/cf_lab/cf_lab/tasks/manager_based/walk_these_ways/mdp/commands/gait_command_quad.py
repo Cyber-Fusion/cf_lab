@@ -158,8 +158,8 @@ class GaitCommandQuad(CommandTerm):
     def _update_command(self):
         """Incrementally advance gait phase and compute per-foot indices."""
         # Apply vx-coupling first so the phase advance below uses up-to-date frequency.
-        # The vx reads the *previous* step's filtered value from the sibling velocity term
-        # (it ticks after this one); the 1-step lag is negligible at the IIR time constant.
+        # The vx reads the *previous* step's value from the sibling velocity term
+        # (it ticks after this one); the 1-step lag is negligible.
         if self.cfg.couple_to_vx or self.cfg.couple_duration_to_vx or self.cfg.couple_frequency_to_vx:
             vel_term = self._env.command_manager.get_term(self.cfg.velocity_command_name)
             vx = vel_term.command[:, 0]

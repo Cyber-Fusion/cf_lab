@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Multi-gait velocity command with a vx-only curriculum and an IIR low-pass filter."""
+"""Multi-gait velocity command with a vx-only curriculum."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class MultiGaitVelocityCommand(UniformVelocityCommand):
-    """Velocity command that samples from a per-gait range and applies a first-order IIR filter.
+    """Velocity command that samples from a per-gait range.
 
     Reads the canonical gait assignment for each env from a sibling :class:`GaitCommandQuad`
     term (via its ``gait_ids`` tensor) and samples ``lin_vel_x``, ``lin_vel_y``, ``ang_vel_z``
@@ -34,14 +34,9 @@ class MultiGaitVelocityCommand(UniformVelocityCommand):
     to the per-gait range at progress 1. ``lin_vel_y`` and ``ang_vel_z`` are sampled directly
     from their (small) per-gait ranges from step 0 without any curriculum ramp.
 
-    The output is passed through an IIR low-pass filter so resample-time jumps are smoothed
-    out:
-
-    .. math:: v[k] = \\beta\\, \\text{target}[k] + (1 - \\beta)\\, v[k-1]
-
-    When :attr:`MultiGaitVelocityCommandCfg.couple_to_vx` is True, the filtered ``vy`` and
-    ``ang_vel_z`` are then multiplied by ``vx_scale(vx_filtered)`` so the policy is not asked
-    to track aggressive lateral / yaw objectives while running fast forward.
+    When :attr:`MultiGaitVelocityCommandCfg.couple_to_vx` is True, ``vy`` and ``ang_vel_z`` are
+    multiplied by ``vx_scale(vx)`` so the policy is not asked to track aggressive lateral / yaw
+    objectives while running fast forward.
     """
 
     cfg: MultiGaitVelocityCommandCfg
@@ -51,10 +46,6 @@ class MultiGaitVelocityCommand(UniformVelocityCommand):
 
         # progress in [0, 1] driven by the curriculum term; resample sees the latest value
         self.curriculum_progress: float = 0.0
-
-        # IIR filter output; what `command` returns. Starts at zero so a fresh env ramps up
-        # smoothly from 0 to its sampled target.
-        self._filtered_vel_command = torch.zeros_like(self.vel_command_b)
 
         # Stack per-gait ranges into device tensors of shape (num_gaits, 2) for vectorised lookup
         ranges_pg = cfg.ranges_per_gait
@@ -74,26 +65,8 @@ class MultiGaitVelocityCommand(UniformVelocityCommand):
         self._range_heading = torch.tensor(heading_rows, dtype=torch.float, device=self.device)
 
     """
-    Properties
-    """
-
-    @property
-    def command(self) -> torch.Tensor:
-        """The filtered base-frame velocity command. Shape is (num_envs, 3)."""
-        return self._filtered_vel_command
-
-    """
     Implementation specific functions.
     """
-
-    def reset(self, env_ids: Sequence[int] | None = None) -> dict[str, float]:
-        # Reset the filter state for the reset envs so they ramp up smoothly from zero
-        # instead of inheriting the last filtered value from the previous episode.
-        if env_ids is None:
-            self._filtered_vel_command[:] = 0.0
-        else:
-            self._filtered_vel_command[env_ids] = 0.0
-        return super().reset(env_ids)
 
     def _resample_command(self, env_ids: Sequence[int]):
         # Pull the gait assignment for each resampling env from the sibling gait term.
@@ -131,15 +104,13 @@ class MultiGaitVelocityCommand(UniformVelocityCommand):
 
     def _update_command(self):
         # Parent applies heading-control on vel_command_b[:, 2] for heading envs (clamped to
-        # cfg.ranges.ang_vel_z) and zeroes vel_command_b for standing envs. Filter on top.
+        # cfg.ranges.ang_vel_z) and zeroes vel_command_b for standing envs.
         super()._update_command()
-        beta = self.cfg.filter_beta
-        self._filtered_vel_command = beta * self.vel_command_b + (1.0 - beta) * self._filtered_vel_command
 
         # Uniform vx-based shrink on the secondary commands. Below |vx|=1 nothing changes; above,
         # vy and omega decay as 1/(|vx|/knee). The matching scaling on pitch / roll / base-height
         # lives in the sibling GaitCommandQuad term.
         if self.cfg.couple_to_vx:
-            scale = vx_scale(self._filtered_vel_command[:, 0])
-            self._filtered_vel_command[:, 1] *= scale  # vy
-            self._filtered_vel_command[:, 2] *= scale  # omega
+            scale = vx_scale(self.vel_command_b[:, 0])
+            self.vel_command_b[:, 1] *= scale  # vy
+            self.vel_command_b[:, 2] *= scale  # omega

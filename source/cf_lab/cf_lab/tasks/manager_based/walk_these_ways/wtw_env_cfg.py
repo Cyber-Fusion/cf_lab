@@ -148,8 +148,6 @@ class CommandsCfg:
         heading_command=True,
         heading_control_stiffness=0.5,
         debug_vis=True,
-        # IIR low-pass filter applied each control step so resample-time jumps fade in smoothly.
-        filter_beta=0.15,
         # Curriculum-start bound on |vx|; ramped to the per-gait final range over `anneal_steps`
         # env steps (see CurriculumCfg.gait_velocity_curriculum). vy and omega are not
         # curriculum-ramped (their per-gait ranges are already small).
@@ -401,8 +399,8 @@ class RewardsCfg:
         weight=1.0,
         params={
             "command_name": "base_velocity",
-            "sigma_low": 0.25,
-            "sigma_high": 0.5,
+            "sigma_low": 0.5,
+            "sigma_high": 1.0,
             "sigma_low_vel": 1.0,
             "sigma_high_vel": 2.0,
             "ramp_at_vel": 1.0,
@@ -422,6 +420,26 @@ class RewardsCfg:
         func=mdp.GaitRewardQuad,
         weight=0.0,
         params={
+            "tracking_contacts_shaped_force": -1.0,
+            "tracking_contacts_shaped_vel": -1.0,
+            "gait_force_sigma": 50.0,
+            "gait_vel_sigma": 0.25,
+            "kappa_gait_probs": 0.07,
+            "command_name": "gait_command",
+            "asset_cfg": SceneEntityCfg("robot", body_names=Params.feet_names),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=Params.feet_names),
+        },
+        reward_type=RewardType.EXP_NEGATIVE,
+    )
+
+    contact_when_wanted_low_speed = WtwRewTerm(
+        func=mdp.ContactWhenWantedLowSpeed,
+        weight=0.0,
+        params={
+            "vx_low": 0.5,
+            "vx_high": 1.5,
+            "contact_force_sigma": 25.0,
+            # Re-use the gait-reward signature so the parent constructor finds what it needs.
             "tracking_contacts_shaped_force": -1.0,
             "tracking_contacts_shaped_vel": -1.0,
             "gait_force_sigma": 50.0,
