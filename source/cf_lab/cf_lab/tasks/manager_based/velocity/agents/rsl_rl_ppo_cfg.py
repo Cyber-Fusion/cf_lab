@@ -3,9 +3,19 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
-
 from isaaclab.utils import configclass
+
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoActorCriticCfg,
+    RslRlPpoAlgorithmCfg,
+    RslRlSymmetryCfg,
+)
+
+from cf_lab.tasks.manager_based.velocity.mdp.symmetry.ayg import (
+    compute_symmetric_states,
+    compute_symmetric_states_spot_inspired,
+)
 
 
 @configclass
@@ -34,6 +44,12 @@ class AygRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
+        symmetry_cfg=RslRlSymmetryCfg(
+            use_data_augmentation=False,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_symmetric_states,
+            mirror_loss_coeff=1.0,
+        ),
     )
 
 
@@ -74,4 +90,10 @@ class AygSpotInspPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
+        symmetry_cfg=RslRlSymmetryCfg(
+            use_data_augmentation=False,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_symmetric_states_spot_inspired,
+            mirror_loss_coeff=1.0,
+        ),
     )

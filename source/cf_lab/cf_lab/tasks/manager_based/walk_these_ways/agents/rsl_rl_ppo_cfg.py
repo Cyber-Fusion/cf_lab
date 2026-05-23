@@ -5,7 +5,12 @@
 
 from isaaclab.utils import configclass
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoActorCriticCfg,
+    RslRlPpoAlgorithmCfg,
+    RslRlSymmetryCfg,
+)
 
 
 @configclass
@@ -46,6 +51,12 @@ class AygFlatWTWPPORunnerCfg(AygRoughWTWPPORunnerCfg):
         self.experiment_name = "ayg_wtw_flat"
         self.policy.actor_hidden_dims = [512, 256, 128]
         self.policy.critic_hidden_dims = [512, 256, 128]
+        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
+            use_data_augmentation=False,
+            use_mirror_loss=False,
+            data_augmentation_func="cf_lab.tasks.manager_based.walk_these_ways.mdp.symmetry:bilateral_symmetry_augmentation",
+            mirror_loss_coeff=1.0,
+        )
 
 
 @configclass
