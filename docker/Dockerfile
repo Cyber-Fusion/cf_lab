@@ -10,3 +10,7 @@ RUN git config --global --add safe.directory /workspace/cf_lab && \
     git config --global --add safe.directory /workspace/isaaclab
 
 RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Enable bash completion for cf_lab training/play scripts.
+RUN echo '[ -f /workspace/cf_lab/scripts/completion.bash ] && source /workspace/cf_lab/scripts/completion.bash' \
+    >> /root/.bashrc
