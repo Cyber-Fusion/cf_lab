@@ -50,11 +50,11 @@ import cf_lab.tasks  # noqa: E402, F401  # registers Ayg gym envs
 # Layout pinned by rough_student_env_cfg.py + rsl_rl_distillation_cfg.py:
 #   ego_dim   = base_ang_vel(3) + projected_gravity(3) + velocity_commands(3)
 #             + joint_pos(12) + joint_vel(12) + actions(12) = 45
-#   depth     = history_length * H * W = 10 * 45 * 80 = 36000
-#   policy    = ego + depth_flat = 36045
+#   depth     = history_length * H * W = 20 * 45 * 80 = 72000
+#   policy    = ego + depth_flat = 72045
 #   teacher   = 48 ego + 187 height_scan rays = 235
 EGO_DIM = 45
-DEPTH_T, DEPTH_H, DEPTH_W = 10, 45, 80
+DEPTH_T, DEPTH_H, DEPTH_W = 20, 45, 80
 DEPTH_FLAT = DEPTH_T * DEPTH_H * DEPTH_W
 EXPECTED_POLICY_DIM = EGO_DIM + DEPTH_FLAT
 EXPECTED_TEACHER_DIM = 235
@@ -63,9 +63,9 @@ EXPECTED_TEACHER_DIM = 235
 def _depth_tensor(obs):
     """Extract the most recent depth frame from the concatenated student obs.
 
-    The env emits obs["policy"] = (N, 45 + 10*45*80) where the trailing 36000
-    is the 10-frame stack flattened in time-first order (frame[t=0] first,
-    frame[t=9] last). We pull the last frame and reshape to (N, H, W, 1) so
+    The env emits obs["policy"] = (N, 45 + 20*45*80) where the trailing 72000
+    is the 20-frame stack flattened in time-first order (frame[t=0] first,
+    frame[t=19] last). We pull the last frame and reshape to (N, H, W, 1) so
     the rest of this script can stay shape-symmetric with the legacy Dict
     layout it was written for.
     """

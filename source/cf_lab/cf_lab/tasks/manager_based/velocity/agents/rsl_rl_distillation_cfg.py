@@ -48,9 +48,9 @@ class _VisionStudentTeacherCfg(RslRlDistillationStudentTeacherCfg):
     # the term order pinning the slice boundary):
     #   ego_dim = base_ang_vel + projected_gravity + velocity_commands
     #           + joint_pos + joint_vel + actions = 3+3+3+12+12+12 = 45
-    #   depth = history_length * height * width = 10 * 45 * 80 = 36000
+    #   depth = history_length * height * width = 20 * 45 * 80 = 72000
     ego_dim: int = 45
-    depth_t: int = 10
+    depth_t: int = 20
     depth_h: int = 45
     depth_w: int = 80
     depth_latent_dim: int = 64

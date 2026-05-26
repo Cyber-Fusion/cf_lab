@@ -96,7 +96,7 @@ def _apply_student_overlay(cfg) -> None:
     )
 
     # Student `policy` group: strip privileged terms, add depth with sim-to-real noise.
-    # history_length=10 + flatten_history_dim=True gives the depth term a 10-frame
+    # history_length=20 + flatten_history_dim=True gives the depth term a 20-frame
     # history that the env flattens into a single (N, T*H*W*1) vector. The vision
     # StudentTeacher subclass (cf_lab.learning.student_teacher_vision) reshapes this
     # back to (N, T, H, W) inside the depth CNN, after slicing past the leading ego
@@ -111,25 +111,27 @@ def _apply_student_overlay(cfg) -> None:
             "normalize": True,
         },
         noise=Gnoise(mean=0.0, std=0.02),
-        history_length=10,
+        history_length=20,
         flatten_history_dim=True,
     )
     # All policy terms now share rank — single concatenated tensor for the
     # RSL-RL DistillationRunner. Term order (set by __dict__ insertion):
     # base_ang_vel(3) + projected_gravity(3) + velocity_commands(3)
-    # + joint_pos(12) + joint_vel(12) + actions(12) + depth(10*45*80=36000) = 36045.
+    # + joint_pos(12) + joint_vel(12) + actions(12) + depth(20*45*80=72000) = 72045.
     cfg.observations.policy.concatenate_terms = True
 
-    # Forward-biased command sampling for the vision student.
+    # Forward-only command sampling for the vision student.
     # Teacher was trained on [-1, 1] symmetric ranges (see rough_env_cfg.py:133-135)
     # using its full 187-ray height_scan. The student's forward depth cone can't
     # see what's behind/beside the feet, so asking it to imitate teacher actions
     # on backward/lateral commands is asking it to copy without the information
-    # the teacher used. Subset stays in-distribution for the teacher (so labels
-    # remain valid) while limiting the student to motions its camera supports.
+    # the teacher used. Earlier narrowed ranges (lat ±0.3, yaw ±0.5) still didn't
+    # beat the blind baseline, so per team-lead suggestion we zero out lateral
+    # and yaw entirely: isolate the question "does depth help us walk forward
+    # over rough terrain at all?" before reintroducing the other axes.
     cfg.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
-    cfg.commands.base_velocity.ranges.lin_vel_y = (-0.3, 0.3)
-    cfg.commands.base_velocity.ranges.ang_vel_z = (-0.5, 0.5)
+    cfg.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+    cfg.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
 
 
 @configclass
