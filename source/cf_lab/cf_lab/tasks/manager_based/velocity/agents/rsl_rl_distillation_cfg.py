@@ -48,10 +48,10 @@ class _VisionStudentTeacherCfg(RslRlDistillationStudentTeacherCfg):
     # the term order pinning the slice boundary):
     #   ego_dim = base_ang_vel + projected_gravity + velocity_commands
     #           + joint_pos + joint_vel + actions = 3+3+3+12+12+12 = 45
-    #   depth = history_length * height * width = 20 * 45 * 80 = 72000
+    #   depth = history_length * height * width = 20 * 60 * 80 = 96000
     ego_dim: int = 45
     depth_t: int = 20
-    depth_h: int = 45
+    depth_h: int = 60
     depth_w: int = 80
     depth_latent_dim: int = 64
     ego_latent_dim: int = 128
@@ -90,7 +90,7 @@ class AygRoughStudentVisionDistillationCfg(RslRlDistillationRunnerCfg):
     )
     algorithm = RslRlDistillationAlgorithmCfg(
         num_learning_epochs=5,
-        learning_rate=1.0e-3,
+        learning_rate=5.0e-4,
         gradient_length=15,
         loss_type="mse",
         optimizer="adam",

@@ -102,7 +102,7 @@ def _apply_student_overlay(cfg) -> None:
             clipping_range=(0.26, 9.0),
         ),
         width=80,
-        height=45,
+        height=60,
         update_period=1.0 / 30.0,
         depth_clipping_behavior="zero",
     )
@@ -129,7 +129,7 @@ def _apply_student_overlay(cfg) -> None:
     # All policy terms now share rank — single concatenated tensor for the
     # RSL-RL DistillationRunner. Term order (set by __dict__ insertion):
     # base_ang_vel(3) + projected_gravity(3) + velocity_commands(3)
-    # + joint_pos(12) + joint_vel(12) + actions(12) + depth(20*45*80=72000) = 72045.
+    # + joint_pos(12) + joint_vel(12) + actions(12) + depth(20*60*80=96000) = 96045.
     cfg.observations.policy.concatenate_terms = True
 
     # Forward-only command sampling for the vision student.
