@@ -3,19 +3,17 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Script to record a cinematic video of a trained RSL-RL policy.
+"""Script to record a cinematic terrain tour of a trained RSL-RL policy.
 
-Features:
-- Still phase: close-up tracking of a single robot (--follow_robot, --follow_offset)
-- Zoom-out phase: smooth transition to wide cinematic shot with orbit rotation and ease-out
-- Hold phase: wide shot at final rotation angle
-- Optional robot centroid tracking for wide shot (--follow)
-- Command text overlay (--show_commands)
-- No env resets during recording (terminations disabled, long episode)
-- Parametrized video length, rotation angle, and phase fractions
+Tours every robot in the scene one-by-one with a close-following camera and a gentle
+orbit, so each terrain tile gets airtime. Smooth eased transitions between robots.
 
-Note: Do NOT use --headless. The RGB annotator is broken in headless mode
-with this Isaac Sim version. Run with a display (the window will open briefly).
+- Default 60 s video (3000 steps @ 50 Hz).
+- No env resets during recording (terminations disabled, long episode).
+- Optional overlays: velocity command (--show_commands) and tour index (--show_tour_info).
+
+Note: Do NOT use --headless. The RGB annotator is broken in headless mode with this
+Isaac Sim version. Run with a display (the window will open briefly).
 """
 
 """Launch Isaac Sim Simulator first."""
@@ -31,12 +29,22 @@ from isaaclab.app import AppLauncher
 import cli_args  # isort: skip
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Record a cinematic video of a trained RSL-RL policy.")
-parser.add_argument("--video_length", type=int, default=1000, help="Length of the recorded video (in steps). ~20s at 50Hz.")
+parser = argparse.ArgumentParser(description="Record a cinematic terrain tour of a trained RSL-RL policy.")
+parser.add_argument(
+    "--video_length",
+    type=int,
+    default=3000,
+    help="Length of the recorded video (in steps). Default 3000 = ~60 s at 50 Hz.",
+)
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
-parser.add_argument("--num_envs", type=int, default=50, help="Number of environments (robots) to simulate.")
+parser.add_argument(
+    "--num_envs",
+    type=int,
+    default=8,
+    help="Number of environments (robots) to simulate. The tour visits each one.",
+)
 parser.add_argument("--task", type=str, required=True, help="Name of the task.")
 parser.add_argument(
     "--agent", type=str, default="rsl_rl_cfg_entry_point", help="Name of the RL agent configuration entry point."
@@ -49,64 +57,34 @@ parser.add_argument(
 )
 # camera arguments
 parser.add_argument(
-    "--eye_start",
-    type=str,
-    default="(3.0, 3.0, 2.0)",
-    help="Camera start position as '(x, y, z)'. Default: '(3.0, 3.0, 2.0)'.",
-)
-parser.add_argument(
-    "--eye_end",
-    type=str,
-    default="(12.0, 12.0, 6.0)",
-    help="Camera end position as '(x, y, z)'. Default: '(12.0, 12.0, 6.0)'.",
-)
-parser.add_argument(
-    "--lookat",
-    type=str,
-    default="(0.0, 0.0, 0.0)",
-    help="Camera look-at target as '(x, y, z)'. Default: '(0.0, 0.0, 0.0)'.",
-)
-parser.add_argument(
-    "--follow",
-    action="store_true",
-    default=False,
-    help="Track centroid of all robots instead of fixed --lookat target.",
-)
-parser.add_argument(
-    "--follow_robot",
-    type=int,
-    default=0,
-    help="Index of robot to follow during the still phase (close-up tracking). Default: 0.",
-)
-parser.add_argument(
     "--follow_offset",
     type=str,
-    default="(1.5, 1.5, 0.8)",
-    help="Camera offset relative to followed robot during still phase as '(x, y, z)'. Default: '(1.5, 1.5, 0.8)'.",
+    default="(2.0, 2.0, 1.2)",
+    help="Camera offset relative to the currently-followed robot as '(x, y, z)'. Default: '(2.0, 2.0, 1.2)'.",
 )
 parser.add_argument(
-    "--still_fraction",
+    "--orbit_degrees_per_robot",
+    type=float,
+    default=40.0,
+    help="Camera orbit around each robot during its hold segment (degrees). Default: 40.",
+)
+parser.add_argument(
+    "--transition_fraction",
     type=float,
     default=0.15,
-    help="Fraction of video where camera stays still (close). Default: 0.15.",
-)
-parser.add_argument(
-    "--zoom_fraction",
-    type=float,
-    default=0.35,
-    help="Fraction of video for the zoom-out transition. The remainder is held at the far position. Default: 0.35.",
+    help="Fraction of each per-robot segment spent transitioning to the next robot. Default: 0.15.",
 )
 parser.add_argument(
     "--show_commands",
     action="store_true",
     default=False,
-    help="Overlay velocity command text on the video.",
+    help="Overlay velocity command text on the video (for the currently-followed robot).",
 )
 parser.add_argument(
-    "--rotation_degrees",
-    type=float,
-    default=120.0,
-    help="Total camera orbit rotation around the target (degrees). Default: 120.",
+    "--show_tour_info",
+    action="store_true",
+    default=False,
+    help="Overlay 'Robot i/N' tour index on the video.",
 )
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
@@ -163,9 +141,9 @@ def parse_tuple(s: str) -> tuple[float, float, float]:
     return tuple(float(x) for x in result)
 
 
-def ease_out(t: float) -> float:
-    """Ease-out interpolation using cosine curve. t in [0, 1] -> [0, 1]."""
-    return 1.0 - math.cos(t * math.pi / 2.0)
+def ease_in_out(t: float) -> float:
+    """Smooth cosine ease-in-out. t in [0, 1] -> [0, 1]."""
+    return 0.5 - 0.5 * math.cos(t * math.pi)
 
 
 def rotate_around_z(offset: np.ndarray, angle_rad: float) -> np.ndarray:
@@ -175,29 +153,36 @@ def rotate_around_z(offset: np.ndarray, angle_rad: float) -> np.ndarray:
     return np.array([c * x - s * y, s * x + c * y, z])
 
 
-def overlay_commands(frame, env_unwrapped):
-    """Overlay velocity command text on a frame. Returns frame (possibly modified)."""
+def overlay_text(frame, lines):
+    """Stack short text lines in the top-left corner of the frame."""
     try:
         import cv2
     except ImportError:
         return frame
-
-    frame = np.copy(frame)
-    try:
-        cmd = env_unwrapped.command_manager.get_command("base_velocity")[0]
-        vx, vy, wz = cmd[0].item(), cmd[1].item(), cmd[2].item()
-        text = f"vx={vx:+.2f}  vy={vy:+.2f}  wz={wz:+.2f}"
-    except (AttributeError, KeyError, IndexError):
+    if not lines:
         return frame
-
+    frame = np.copy(frame)
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale, thickness = 0.7, 2
-    pos = (15, 35)
-    (tw, th), baseline = cv2.getTextSize(text, font, font_scale, thickness)
-    x, y = pos
-    cv2.rectangle(frame, (x - 5, y - th - 5), (x + tw + 5, y + baseline + 5), (0, 0, 0), -1)
-    cv2.putText(frame, text, pos, font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+    pad = 5
+    y = 35
+    for line in lines:
+        (tw, th), baseline = cv2.getTextSize(line, font, font_scale, thickness)
+        x = 15
+        cv2.rectangle(frame, (x - pad, y - th - pad), (x + tw + pad, y + baseline + pad), (0, 0, 0), -1)
+        cv2.putText(frame, line, (x, y), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+        y += th + baseline + 12
     return frame
+
+
+def velocity_cmd_text(env_unwrapped, robot_idx: int):
+    """Return 'vx=... vy=... wz=...' for the given robot's base_velocity command, or None."""
+    try:
+        cmd = env_unwrapped.command_manager.get_command("base_velocity")[robot_idx]
+        vx, vy, wz = cmd[0].item(), cmd[1].item(), cmd[2].item()
+        return f"vx={vx:+.2f}  vy={vy:+.2f}  wz={wz:+.2f}"
+    except (AttributeError, KeyError, IndexError):
+        return None
 
 
 def disable_terminations(env_cfg):
@@ -220,11 +205,7 @@ def disable_terminations(env_cfg):
 
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
-    """Record a cinematic video of a trained RSL-RL policy."""
-    # parse camera positions
-    eye_start = np.array(parse_tuple(args_cli.eye_start))
-    eye_end = np.array(parse_tuple(args_cli.eye_end))
-    lookat = np.array(parse_tuple(args_cli.lookat))
+    """Record a cinematic terrain tour of a trained RSL-RL policy."""
     follow_offset = np.array(parse_tuple(args_cli.follow_offset))
 
     # grab task name for checkpoint path
@@ -261,8 +242,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
     log_dir = os.path.dirname(resume_path)
-
-    # set the log directory for the environment
     env_cfg.log_dir = log_dir
 
     # create isaac environment with rgb_array render mode for video capture
@@ -298,78 +277,59 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     except AttributeError:
         policy_nn = runner.alg.actor_critic
 
-    # compute camera parameters (3 phases: still close -> zoom out -> hold far)
-    still_steps = int(args_cli.video_length * args_cli.still_fraction)
-    zoom_steps = int(args_cli.video_length * args_cli.zoom_fraction)
-    total_rotation_rad = math.radians(args_cli.rotation_degrees)
+    # tour bookkeeping
+    num_envs = args_cli.num_envs
+    segment_steps = max(1, args_cli.video_length // num_envs)
+    transition_steps = max(1, int(segment_steps * args_cli.transition_fraction))
+    hold_steps = max(1, segment_steps - transition_steps)
+    orbit_per_robot_rad = math.radians(args_cli.orbit_degrees_per_robot)
 
     # reset environment
     obs = env.get_observations()
 
-    # helper to get a single robot's position
     def get_robot_pos(idx: int) -> np.ndarray | None:
         try:
             return env.unwrapped.scene["robot"].data.root_pos_w[idx].cpu().numpy()
         except (AttributeError, KeyError, IndexError):
             return None
 
-    # wide-shot target: centroid (--follow) or fixed lookat
-    if args_cli.follow:
-        try:
-            root_pos = env.unwrapped.scene["robot"].data.root_pos_w  # (num_envs, 3)
-            wide_target = root_pos.mean(dim=0).cpu().numpy()
-            print(f"[INFO] Follow mode: wide-shot centroid at {wide_target}")
-        except (AttributeError, KeyError):
-            print("[WARN] Could not get robot positions. Falling back to fixed lookat.")
-            wide_target = lookat
-    else:
-        wide_target = lookat
-
-    # set initial camera on the followed robot
-    robot_pos = get_robot_pos(args_cli.follow_robot)
-    if robot_pos is not None:
-        init_target = robot_pos
-        init_eye = robot_pos + follow_offset
-    else:
-        print("[WARN] Could not get followed robot position. Using eye_start/lookat.")
-        init_target = wide_target
-        init_eye = eye_start
-    env.unwrapped.sim.set_camera_view(eye=init_eye, target=init_target)
+    # initial camera placement on robot 0
+    init_pos = get_robot_pos(0)
+    if init_pos is not None:
+        env.unwrapped.sim.set_camera_view(eye=init_pos + follow_offset, target=init_pos)
 
     frames = []
     timestep = 0
-    print(f"[INFO] Recording {args_cli.video_length} steps...")
-    # simulate environment and animate camera
+    print(
+        f"[INFO] Tour: {num_envs} robots × {segment_steps} steps "
+        f"({hold_steps} hold + {transition_steps} transition). Total {args_cli.video_length} steps."
+    )
+    # simulate environment and animate camera through the tour
     while simulation_app.is_running():
-        if timestep < still_steps:
-            # --- still phase: close-up tracking a single robot ---
-            robot_pos = get_robot_pos(args_cli.follow_robot)
-            if robot_pos is not None:
-                target = robot_pos
-                eye = robot_pos + follow_offset
-            else:
-                target = wide_target
-                eye = eye_start.copy()
-        elif timestep < still_steps + zoom_steps:
-            # --- zoom-out phase: transition from robot follow to wide cinematic shot ---
-            t_linear = (timestep - still_steps) / max(zoom_steps - 1, 1)
-            t_eased = ease_out(min(t_linear, 1.0))
-            # snapshot robot position at transition start
-            if timestep == still_steps:
-                robot_pos = get_robot_pos(args_cli.follow_robot)
-                transition_start_target = robot_pos if robot_pos is not None else wide_target
-                transition_start_eye = (robot_pos + follow_offset) if robot_pos is not None else eye_start.copy()
-            # interpolate target: robot -> wide target
-            target = transition_start_target + t_eased * (wide_target - transition_start_target)
-            # interpolate eye: robot close-up -> eye_end (with rotation)
-            eye = transition_start_eye + t_eased * (eye_end - transition_start_eye)
-            # apply rotation
-            angle = t_eased * total_rotation_rad
-            eye = target + rotate_around_z(eye - target, angle)
+        segment_idx = min(timestep // segment_steps, num_envs - 1)
+        step_in_segment = timestep - segment_idx * segment_steps
+        current_robot = segment_idx
+        next_robot = min(segment_idx + 1, num_envs - 1)
+
+        cur_pos = get_robot_pos(current_robot)
+        next_pos = get_robot_pos(next_robot)
+
+        if step_in_segment < hold_steps:
+            # --- hold phase: close-up on current robot with slight orbit ---
+            t_hold = step_in_segment / max(hold_steps - 1, 1)
+            angle = t_hold * orbit_per_robot_rad
+            target = cur_pos if cur_pos is not None else np.zeros(3)
+            eye = target + rotate_around_z(follow_offset, angle)
         else:
-            # --- hold phase: wide cinematic shot at final rotation ---
-            target = wide_target
-            eye = target + rotate_around_z(eye_end - wide_target, total_rotation_rad)
+            # --- transition phase: morph from current close-up to next close-up ---
+            t = (step_in_segment - hold_steps) / max(transition_steps, 1)
+            t_eased = ease_in_out(min(t, 1.0))
+            cur_t = cur_pos if cur_pos is not None else np.zeros(3)
+            nxt_t = next_pos if next_pos is not None else cur_t
+            cur_e = cur_t + rotate_around_z(follow_offset, orbit_per_robot_rad)
+            nxt_e = nxt_t + follow_offset
+            target = cur_t + t_eased * (nxt_t - cur_t)
+            eye = cur_e + t_eased * (nxt_e - cur_e)
 
         env.unwrapped.sim.set_camera_view(eye=eye, target=target)
 
@@ -382,8 +342,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # capture frame
         frame = env.env.render()
         if frame is not None:
+            overlay_lines = []
+            if args_cli.show_tour_info:
+                overlay_lines.append(f"Robot {current_robot + 1}/{num_envs}")
             if args_cli.show_commands:
-                frame = overlay_commands(frame, env.unwrapped)
+                cmd_line = velocity_cmd_text(env.unwrapped, current_robot)
+                if cmd_line is not None:
+                    overlay_lines.append(cmd_line)
+            if overlay_lines:
+                frame = overlay_text(frame, overlay_lines)
             frames.append(frame)
 
         timestep += 1
