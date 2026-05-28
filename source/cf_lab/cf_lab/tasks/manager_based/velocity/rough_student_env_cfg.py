@@ -67,10 +67,22 @@ def _apply_student_overlay(cfg) -> None:
     # (parent prim already exists after URDF import; spawning at the link path
     # itself would raise "A prim already exists").
     #
-    # The OffsetCfg is interpreted in ROS body convention (X forward, Y left,
-    # Z up) per `convention="ros"`. A 30 deg "pitch-down" — the camera optical
-    # axis tilting toward the ground — is a +30 deg rotation about the +Y axis
-    # (right-hand rule: +X rotates toward -Z, i.e., forward goes down).
+    # Geometry source of truth: ayg_description/urdf/camera.xacro. The URDF
+    # places the Camera link origin at (0.2475, 0, 0.105) in Base (raised 1 cm
+    # vs. earlier value of 0.095 to mirror the planned hardware bracket
+    # revision) and translates Camera_body by (0.0527, -0.024, 0) in Camera-
+    # local axes so the D450 optical-module reference sits at (+5.27 cm fwd,
+    # -2.4 cm vertical) of the Camera link in robot body frame — i.e., inside
+    # the D555 housing where the depth/IR/IMU sensors physically live. The
+    # depth optical center in Base is therefore (0.3002, 0, 0.081).
+    #
+    # The OffsetCfg below adds only the pitch-down rotation. pos stays
+    # (0,0,0) because the URDF already encodes the correct optical-center
+    # position. The OffsetCfg is interpreted in ROS body convention
+    # (X forward, Y left, Z up) per `convention="ros"`. A 30 deg "pitch-down"
+    # — the camera optical axis tilting toward the ground — is a +30 deg
+    # rotation about the +Y axis (right-hand rule: +X rotates toward -Z,
+    # i.e., forward goes down).
     #
     # Quaternion (w, x, y, z) for +30 deg about Y: (cos(15), 0, sin(15), 0).
     # If a visual check shows the camera looking *up* instead, flip the sign
