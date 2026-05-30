@@ -27,6 +27,7 @@ from typing import Any
 
 import torch
 import torch.nn as nn
+import torch.utils.checkpoint as torch_checkpoint
 from rsl_rl.modules import StudentTeacher
 
 
@@ -143,6 +144,10 @@ class VisionStudentNet(nn.Module):
         layers.append(nn.Linear(prev, num_actions))
         self.policy_head = nn.Sequential(*layers)
 
+    def _encode_frames(self, frames: torch.Tensor) -> torch.Tensor:
+        """Shared per-frame CNN encode: (N*T, 1, H, W) -> (N*T, frame_latent_dim)."""
+        return self.frame_head(self.frame_cnn(frames).flatten(1))
+
     def encode_temporal(self, x: torch.Tensor) -> torch.Tensor:
         """Return the pooled temporal-depth latent. Exposed for the Phase-2 aux head."""
         n = x.shape[0]
@@ -150,9 +155,18 @@ class VisionStudentNet(nn.Module):
         proprio_flat = x[:, self.ego_dim + self.depth_flat_dim :]
         depth = depth_flat.view(n, self.depth_t, self.depth_h, self.depth_w) / self.far_clip
         proprio = proprio_flat.view(n, self.proprio_t, self.proprio_dim)
-        # Encode every frame with the shared CNN (fold time into the batch dim).
+        # Encode every frame with the shared CNN (fold time into the batch dim, so the
+        # conv runs on N*T images). That batch is the dominant activation cost, and the
+        # distillation update holds it across `gradient_length` accumulated steps -> OOM.
+        # Gradient-checkpoint the per-frame encode during training: store only the input
+        # and recompute the conv in backward (~10x less activation memory, ~30% more
+        # compute). Skipped when grad is off (rollout / ONNX export) so those paths are
+        # the plain forward.
         frames = depth.reshape(n * self.depth_t, 1, self.depth_h, self.depth_w)
-        frame_latents = self.frame_head(self.frame_cnn(frames).flatten(1))
+        if torch.is_grad_enabled():
+            frame_latents = torch_checkpoint.checkpoint(self._encode_frames, frames, use_reentrant=False)
+        else:
+            frame_latents = self._encode_frames(frames)
         frame_latents = frame_latents.view(n, self.depth_t, -1)
         # Fuse per-frame proprio, then temporal-conv over time (N, C, T).
         seq = torch.cat([frame_latents, proprio], dim=-1).transpose(1, 2)
