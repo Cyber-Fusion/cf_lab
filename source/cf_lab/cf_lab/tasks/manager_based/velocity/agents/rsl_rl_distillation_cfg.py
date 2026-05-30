@@ -45,17 +45,22 @@ class _VisionStudentTeacherCfg(RslRlDistillationStudentTeacherCfg):
     """
 
     # Layout of the concatenated student obs (see rough_student_env_cfg.py for
-    # the term order pinning the slice boundary):
+    # the term order pinning the slice boundaries):
     #   ego_dim = base_ang_vel + projected_gravity + velocity_commands
     #           + joint_pos + joint_vel + actions = 3+3+3+12+12+12 = 45
-    #   depth = history_length * height * width = 20 * 60 * 80 = 96000
+    #   depth   = depth_t * height * width = 10 * 60 * 80 = 48000  (stride-4 history)
+    #   proprio = proprio_t * proprio_dim  = 10 * 21       = 210   (aligned ego-motion)
     ego_dim: int = 45
-    depth_t: int = 20
+    depth_t: int = 10
     depth_h: int = 60
     depth_w: int = 80
-    depth_latent_dim: int = 64
+    proprio_dim: int = 21
+    proprio_t: int = 10
+    frame_latent_dim: int = 64
+    temporal_dim: int = 64
     ego_latent_dim: int = 128
     head_hidden_dims: list[int] = [256, 128]
+    far_clip: float = 9.0
 
 
 @configclass
@@ -66,7 +71,7 @@ class AygRoughStudentVisionDistillationCfg(RslRlDistillationRunnerCfg):
     max_iterations = 2000
     save_interval = 100
     # Share the teacher's experiment folder so ``get_checkpoint_path`` can find
-    # ``logs/rsl_rl/ayg_rough/Teacher(baseline)/model_9999.pt`` directly via the
+    # ``logs/rsl_rl/ayg_rough/Teacher_baseline/model_9999.pt`` directly via the
     # ``--load_run`` / ``--checkpoint`` CLI args.
     experiment_name = "ayg_rough"
     # Map RSL-RL's two policy roles onto the env's two obs groups:
@@ -102,8 +107,8 @@ class AygRoughStudentBlindDistillationCfg(RslRlDistillationRunnerCfg):
     """Distillation runner for the proprio-only blind student (ablation baseline)."""
 
     num_steps_per_env = 24
-    max_iterations = 1000
-    save_interval = 50
+    max_iterations = 2000
+    save_interval = 100
     experiment_name = "ayg_rough"
     # student net consumes env.observations.policy (45-dim ego only), teacher net
     # consumes env.observations.teacher (235-dim ego + height_scan).

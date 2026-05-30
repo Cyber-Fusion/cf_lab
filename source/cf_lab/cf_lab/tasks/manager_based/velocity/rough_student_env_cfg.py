@@ -5,6 +5,7 @@
 
 import math
 
+import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
@@ -14,9 +15,9 @@ from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab.utils.noise import GaussianNoiseCfg as Gnoise
 
-import isaaclab.envs.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import ObservationsCfg
 
+from . import mdp as ayg_mdp
 from .rough_env_cfg import AygRoughEnvCfg, AygRoughEnvCfg_PLAY
 
 # D555 depth contract — must match Gazebo + real driver in Ayg/.
@@ -107,29 +108,43 @@ def _apply_student_overlay(cfg) -> None:
         depth_clipping_behavior="zero",
     )
 
-    # Student `policy` group: strip privileged terms, add depth with sim-to-real noise.
-    # history_length=20 + flatten_history_dim=True gives the depth term a 20-frame
-    # history that the env flattens into a single (N, T*H*W*1) vector. The vision
-    # StudentTeacher subclass (cf_lab.learning.student_teacher_vision) reshapes this
-    # back to (N, T, H, W) inside the depth CNN, after slicing past the leading ego
-    # terms in the concatenated policy obs.
+    # Student `policy` group: strip privileged terms, add a strided depth history +
+    # an aligned strided proprio history.
+    #
+    # Why strided (not contiguous): the env steps at 50 Hz (decimation 4 * dt 0.005)
+    # but the depth camera refreshes at 30 Hz (update_period 1/30), so a contiguous
+    # 20-frame stack spans only ~0.4 s and ~8 of its frames are duplicates. Sampling
+    # 10 frames every `stride=4` control steps (12.5 Hz < 30 Hz) yields 10 *distinct*
+    # frames spanning ~0.72 s. DepthHistoryStrided keeps its own on-device ring buffer
+    # and emits only the 10 strided frames, so the rollout storage holds 10 frames
+    # (not the ~37 it rings internally) — halving the previous depth obs footprint.
+    #
+    # ProprioHistoryStrided emits a matching 10-frame stack of a 21-dim proprio vector
+    # so the temporal encoder can infer inter-frame ego-motion (camera registration).
     cfg.observations.policy.base_lin_vel = None
     cfg.observations.policy.height_scan = None
     cfg.observations.policy.depth = ObsTerm(
-        func=mdp.image,
+        func=ayg_mdp.DepthHistoryStrided,
         params={
             "sensor_cfg": SceneEntityCfg("depth_camera"),
             "data_type": "distance_to_image_plane",
-            "normalize": True,
+            "num_frames": 10,
+            "stride": 4,
+            "far_clip": 9.0,
         },
         noise=Gnoise(mean=0.0, std=0.02),
-        history_length=20,
-        flatten_history_dim=True,
     )
-    # All policy terms now share rank — single concatenated tensor for the
-    # RSL-RL DistillationRunner. Term order (set by __dict__ insertion):
-    # base_ang_vel(3) + projected_gravity(3) + velocity_commands(3)
-    # + joint_pos(12) + joint_vel(12) + actions(12) + depth(20*60*80=96000) = 96045.
+    cfg.observations.policy.proprio_history = ObsTerm(
+        func=ayg_mdp.ProprioHistoryStrided,
+        params={"num_frames": 10, "stride": 4, "command_name": "base_velocity"},
+    )
+    # All policy terms now share rank — single concatenated tensor for the RSL-RL
+    # DistillationRunner. Active term order (set by __dict__ insertion, base_lin_vel
+    # and height_scan are None -> skipped):
+    #   base_ang_vel(3) + projected_gravity(3) + velocity_commands(3)
+    #   + joint_pos(12) + joint_vel(12) + actions(12)            = 45 (ego, sliced first)
+    #   + depth(10*60*80 = 48000)
+    #   + proprio_history(10*21 = 210)                           => total 48255.
     cfg.observations.policy.concatenate_terms = True
 
     # Forward-only command sampling for the vision student.

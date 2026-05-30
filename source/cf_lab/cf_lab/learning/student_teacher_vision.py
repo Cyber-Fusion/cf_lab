@@ -42,7 +42,26 @@ def _activation(name: str) -> nn.Module:
 
 
 class VisionStudentNet(nn.Module):
-    """Depth-CNN + ego-MLP fusion network. ONNX-exportable single forward pass."""
+    """Temporal depth encoder + ego-MLP fusion network. ONNX-exportable, stateless.
+
+    Pipeline (fixes the channel-stack CNN's inability to register a moving camera):
+
+    1. A **shared per-frame 2-D CNN** encodes each of the ``depth_t`` depth frames
+       independently into a per-frame latent (so the same physical patch is encoded
+       the same way regardless of which frame it appears in).
+    2. The per-frame depth latents are concatenated with the aligned **per-frame
+       proprio vector** (ego-motion) and fed to a **1-D temporal convolution** over the
+       time axis, which can model how the scene/flow evolves across frames.
+    3. The pooled temporal latent is fused with the **current ego** latent and mapped
+       to actions.
+
+    Input layout (concatenated policy obs, see ``rough_student_env_cfg.py``):
+        ``[ ego(ego_dim) | depth(depth_t*depth_h*depth_w) | proprio(proprio_t*proprio_dim) ]``
+    Frames are ordered newest-first; the temporal conv is order-agnostic.
+
+    The whole forward pass is a single stateless graph (Conv2d/Conv1d/Linear/ELU),
+    so it exports cleanly to ONNX and runs on the Jetson without recurrent state.
+    """
 
     def __init__(
         self,
@@ -52,27 +71,38 @@ class VisionStudentNet(nn.Module):
         depth_t: int,
         depth_h: int,
         depth_w: int,
-        depth_latent_dim: int = 64,
+        proprio_dim: int,
+        proprio_t: int,
+        frame_latent_dim: int = 64,
+        temporal_dim: int = 64,
         ego_latent_dim: int = 128,
         head_hidden_dims: tuple[int, ...] = (256, 128),
         activation: str = "elu",
+        far_clip: float = 9.0,
     ) -> None:
         super().__init__()
         depth_flat_dim = depth_t * depth_h * depth_w
-        if num_obs != ego_dim + depth_flat_dim:
+        proprio_flat_dim = proprio_t * proprio_dim
+        if proprio_t != depth_t:
+            raise ValueError(f"proprio_t ({proprio_t}) must equal depth_t ({depth_t}) for per-frame fusion.")
+        if num_obs != ego_dim + depth_flat_dim + proprio_flat_dim:
             raise ValueError(
-                f"VisionStudentNet expected num_obs={ego_dim + depth_flat_dim} "
-                f"(ego_dim={ego_dim} + depth_t*depth_h*depth_w={depth_flat_dim}), got {num_obs}."
+                f"VisionStudentNet expected num_obs={ego_dim + depth_flat_dim + proprio_flat_dim} "
+                f"(ego_dim={ego_dim} + depth={depth_flat_dim} + proprio={proprio_flat_dim}), got {num_obs}."
             )
 
         self.ego_dim = ego_dim
         self.depth_t = depth_t
         self.depth_h = depth_h
         self.depth_w = depth_w
+        self.proprio_dim = proprio_dim
+        self.proprio_t = proprio_t
+        self.depth_flat_dim = depth_flat_dim
+        self.far_clip = far_clip
 
-        # Treat the T-frame stack as input channels of a small 2-D CNN.
-        self.depth_encoder = nn.Sequential(
-            nn.Conv2d(depth_t, 32, kernel_size=3, stride=2, padding=1),
+        # (1) Shared per-frame depth CNN (single input channel per frame).
+        self.frame_cnn = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1),
             _activation(activation),
             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             _activation(activation),
@@ -80,17 +110,30 @@ class VisionStudentNet(nn.Module):
             _activation(activation),
         )
         with torch.no_grad():
-            conv_out = self.depth_encoder(torch.zeros(1, depth_t, depth_h, depth_w))
-        self.depth_head = nn.Sequential(
-            nn.Linear(conv_out.flatten(1).shape[1], depth_latent_dim),
+            conv_out = self.frame_cnn(torch.zeros(1, 1, depth_h, depth_w))
+        self.frame_head = nn.Sequential(
+            nn.Linear(conv_out.flatten(1).shape[1], frame_latent_dim),
             _activation(activation),
         )
+
+        # (2) 1-D temporal conv over the time axis. Channels = per-frame depth latent
+        #     + per-frame proprio (ego-motion). Adaptive pool collapses the (short) time
+        #     axis so the head input is fixed regardless of depth_t.
+        temporal_in = frame_latent_dim + proprio_dim
+        self.temporal_conv = nn.Sequential(
+            nn.Conv1d(temporal_in, temporal_dim, kernel_size=3, stride=1, padding=1),
+            _activation(activation),
+            nn.Conv1d(temporal_dim, temporal_dim, kernel_size=3, stride=1, padding=1),
+            _activation(activation),
+            nn.AdaptiveAvgPool1d(1),
+        )
+
+        # (3) Current-ego encoder + fused policy head.
         self.ego_encoder = nn.Sequential(
             nn.Linear(ego_dim, ego_latent_dim),
             _activation(activation),
         )
-
-        fused_dim = depth_latent_dim + ego_latent_dim
+        fused_dim = temporal_dim + ego_latent_dim
         layers: list[nn.Module] = []
         prev = fused_dim
         for h in head_hidden_dims:
@@ -100,17 +143,26 @@ class VisionStudentNet(nn.Module):
         layers.append(nn.Linear(prev, num_actions))
         self.policy_head = nn.Sequential(*layers)
 
+    def encode_temporal(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the pooled temporal-depth latent. Exposed for the Phase-2 aux head."""
+        n = x.shape[0]
+        depth_flat = x[:, self.ego_dim : self.ego_dim + self.depth_flat_dim]
+        proprio_flat = x[:, self.ego_dim + self.depth_flat_dim :]
+        depth = depth_flat.view(n, self.depth_t, self.depth_h, self.depth_w) / self.far_clip
+        proprio = proprio_flat.view(n, self.proprio_t, self.proprio_dim)
+        # Encode every frame with the shared CNN (fold time into the batch dim).
+        frames = depth.reshape(n * self.depth_t, 1, self.depth_h, self.depth_w)
+        frame_latents = self.frame_head(self.frame_cnn(frames).flatten(1))
+        frame_latents = frame_latents.view(n, self.depth_t, -1)
+        # Fuse per-frame proprio, then temporal-conv over time (N, C, T).
+        seq = torch.cat([frame_latents, proprio], dim=-1).transpose(1, 2)
+        return self.temporal_conv(seq).flatten(1)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (N, ego_dim + T*H*W) — env concatenates ego terms first, depth flat last.
         ego = x[:, : self.ego_dim]
-        depth_flat = x[:, self.ego_dim :]
-        n = depth_flat.shape[0]
-        depth_stack = depth_flat.view(n, self.depth_t, self.depth_h, self.depth_w)
-        # Normalize raw depth (meters in roughly [0, 9]) into a stable range.
-        depth_stack = depth_stack / 9.0
-        depth_latent = self.depth_head(self.depth_encoder(depth_stack).flatten(1))
+        temporal_latent = self.encode_temporal(x)
         ego_latent = self.ego_encoder(ego)
-        return self.policy_head(torch.cat([depth_latent, ego_latent], dim=-1))
+        return self.policy_head(torch.cat([temporal_latent, ego_latent], dim=-1))
 
 
 class StudentTeacherVision(StudentTeacher):
@@ -134,9 +186,13 @@ class StudentTeacherVision(StudentTeacher):
         depth_t: int,
         depth_h: int,
         depth_w: int,
-        depth_latent_dim: int = 64,
+        proprio_dim: int,
+        proprio_t: int,
+        frame_latent_dim: int = 64,
+        temporal_dim: int = 64,
         ego_latent_dim: int = 128,
         head_hidden_dims: tuple[int, ...] | list[int] = (256, 128),
+        far_clip: float = 9.0,
         student_hidden_dims=(256, 256, 256),
         teacher_hidden_dims=(512, 256, 128),
         activation: str = "elu",
@@ -164,9 +220,13 @@ class StudentTeacherVision(StudentTeacher):
             depth_t=depth_t,
             depth_h=depth_h,
             depth_w=depth_w,
-            depth_latent_dim=depth_latent_dim,
+            proprio_dim=proprio_dim,
+            proprio_t=proprio_t,
+            frame_latent_dim=frame_latent_dim,
+            temporal_dim=temporal_dim,
             ego_latent_dim=ego_latent_dim,
             head_hidden_dims=tuple(head_hidden_dims),
+            far_clip=far_clip,
             activation=activation,
         )
         # Same noise std parameter shape — handled by parent. Re-print so
